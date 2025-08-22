@@ -1,0 +1,42 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Model files and large binaries
+*.safetensors
+*.pt
+*.h5
+*.ckpt
+*.onnx
+*.bin
+*.dll
+*.lib
+
+# HuggingFace/transformers cache
+models/
+models/*
+
+# FAISS and vector cache
+vector_cache/
+*.faiss
+*.pkl
+
+# Data and logs
+*.csv
+*.tsv
+*.log
+logs/
+
+# Jupyter and notebook checkpoints
+.ipynb_checkpoints
+
+# System files
+.DS_Store
+Thumbs.db

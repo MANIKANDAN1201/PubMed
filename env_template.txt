@@ -1,0 +1,10 @@
+# PubMed Semantic Search App Environment Variables
+# Copy this file to .env and fill in your API keys
+
+# Google Gemini API Key (for Gemini embeddings)
+# Get your key from: https://makersuite.google.com/app/apikey
+GOOGLE_API_KEY=your_gemini_api_key_here
+
+# Optional: NCBI Entrez API Key (for higher rate limits)
+# Get your key from: https://ncbiinsights.ncbi.nlm.nih.gov/2017/11/02/new-api-keys-for-the-e-utilities/
+ENTREZ_API_KEY=your_entrez_api_key_here
