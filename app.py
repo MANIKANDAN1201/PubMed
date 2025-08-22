@@ -1,5 +1,8 @@
+
+
 from __future__ import annotations
 
+from reranker_flashrank import flashrank_rerank
 import hashlib
 from typing import Dict, List, Optional
 import streamlit as st
@@ -257,6 +260,8 @@ def main() -> None:
         st.subheader("🔍 Search Enhancement")
         expand = st.checkbox("Expand query with synonyms", value=True, help="Use medical synonyms for better coverage")
         use_reranking = st.checkbox("Enable intelligent reranking", value=True, help="Boost recent, high-impact papers")
+        use_flashrank = st.sidebar.checkbox("Use FlashRank reranker", value=False)
+
         
         st.divider()
         
@@ -411,9 +416,41 @@ def main() -> None:
 
             if query_embedding is None:
                 return
+            # after:
+            # Run hybrid search
             scores, indices, result_metadata = vector_store.hybrid_search(
                 query, query_embedding, top_k=top_k, use_reranking=use_reranking
             )
+
+            # ✅ FlashRank rerank step
+            if use_flashrank:
+                try:
+                    # Show top 5 titles before rerank
+                    st.write("🔹 Before FlashRank (top 5):", [
+                        m.get("title") if isinstance(m, dict) else getattr(m, "title", "") 
+                        for m in result_metadata[:5]
+                    ])
+
+                    scores, indices, result_metadata = flashrank_rerank(
+                        query=query,
+                        articles=articles,          # use local list
+                        keep_indices=keep_indices,  # use local mapping
+                        scores=scores,
+                        indices=indices,
+                        result_metadata=result_metadata,
+                    )
+
+                    # Show top 5 titles after rerank
+                    st.write("🔸 After FlashRank (top 5):", [
+                        m.get("title") if isinstance(m, dict) else getattr(m, "title", "") 
+                        for m in result_metadata[:5]
+                    ])
+
+                    st.info("Results reranked with FlashRank ✅")
+                except Exception as e:
+                    st.warning(f"FlashRank rerank failed: {e}")
+
+
 
         # Display results with enhanced UI
         st.subheader(f"🎯 Top {len(scores)} Results")

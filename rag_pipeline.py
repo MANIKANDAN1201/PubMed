@@ -12,6 +12,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings  # type: ignore
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI  # type: ignore
 
 
+
 def fetch_full_text(article_url: str) -> Optional[str]:
     """
     Best effort fetch of full text from an article URL. Prioritizes PMC HTML pages.
@@ -48,10 +49,9 @@ def make_text_chunks(text: str, chunk_size: int = 2000, chunk_overlap: int = 300
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        separators=["\n\n", "\n", ". ", ".", " ", ""]
+        separators=["\n\n", "\n", ". ", ".", " "] 
     )
     return splitter.split_text(text)
-
 
 def build_embeddings(model_choice: str = "gemini", device: Optional[str] = None):
     """
