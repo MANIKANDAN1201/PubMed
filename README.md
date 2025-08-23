@@ -4,7 +4,7 @@ This Streamlit app enables advanced semantic and hybrid search over PubMed biome
 
 ### Features
 
-- **Hybrid Search:** Combines semantic (FAISS) and keyword (TF-IDF) search for best results
+- **Hybrid Search:** Combines semantic (FAISS) and keyword (TF-IDF) search for best result
 - **Multiple Embedding Models:** Gemini, Sentence Transformers, PubMedBERT, BioBERT
 - **Query Expansion:** Uses medical synonyms and MeSH terms
 - **Intelligent Reranking:** Boosts recent, high-impact papers
