@@ -1,5 +1,3 @@
-
-
 from __future__ import annotations
 
 from reranker_flashrank import flashrank_rerank
