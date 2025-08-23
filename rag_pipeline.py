@@ -3,16 +3,13 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 import os
 
-from bs4 import BeautifulSoup  # type: ignore
+from bs4 import BeautifulSoup 
 import requests
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter  # type: ignore
-from langchain_community.vectorstores import FAISS as LCFAISS  # type: ignore
-from langchain_community.embeddings import HuggingFaceEmbeddings  # type: ignore
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI  # type: ignore
-
-
-
+from langchain.text_splitter import RecursiveCharacterTextSplitter  
+from langchain_community.vectorstores import FAISS as LCFAISS 
+from langchain_community.embeddings import HuggingFaceEmbeddings 
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI 
 def fetch_full_text(article_url: str) -> Optional[str]:
     """
     Best effort fetch of full text from an article URL. Prioritizes PMC HTML pages.

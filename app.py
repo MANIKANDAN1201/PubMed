@@ -6,6 +6,8 @@ from reranker_flashrank import flashrank_rerank
 import hashlib
 from typing import Dict, List, Optional
 import streamlit as st
+import matplotlib.pyplot as plt
+
 
 import numpy as np
 import pandas as pd
@@ -15,10 +17,10 @@ from pubmed_fetcher import PubMedArticle, fetch_pubmed_articles
 from improved_vector_store import ImprovedVectorStore
 from rag_pipeline import make_text_chunks
 from query_processing import expand_query
-from langchain_google_genai import GoogleGenerativeAIEmbeddings  # type: ignore
-import google.generativeai as genai  # type: ignore
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+import google.generativeai as genai  
 import os
-from dotenv import load_dotenv  # type: ignore
+from dotenv import load_dotenv
 import asyncio
 
 # Load environment variables (e.g., GOOGLE_API_KEY)
@@ -260,7 +262,7 @@ def main() -> None:
         st.subheader("🔍 Search Enhancement")
         expand = st.checkbox("Expand query with synonyms", value=True, help="Use medical synonyms for better coverage")
         use_reranking = st.checkbox("Enable intelligent reranking", value=True, help="Boost recent, high-impact papers")
-        use_flashrank = st.sidebar.checkbox("Use FlashRank reranker", value=False)
+        use_flashrank = st.sidebar.checkbox("Use Langchain's FlashRank reranker", value=False)
 
         
         st.divider()
