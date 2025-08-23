@@ -12,7 +12,7 @@ This Streamlit app enables advanced semantic and hybrid search over PubMed biome
 - **Enhanced UI:** Card-style results, download options, index statistics
 - **Free Full-Text Detection:** PMC and Unpaywall integration
 
-### Requirementsese
+### Requirements
 
 - Python 3.10+
 - Windows, macOS, or Linux
