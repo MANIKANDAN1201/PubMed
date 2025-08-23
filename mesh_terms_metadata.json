@@ -1,0 +1,11 @@
+{
+  "created_at": 1755967547.9945734,
+  "total_terms": 209,
+  "sources": [
+    "pubmed_mesh",
+    "who_icd",
+    "direct_mesh",
+    "datasets"
+  ],
+  "version": "1.0"
+}

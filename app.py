@@ -343,6 +343,13 @@ def main() -> None:
         # Generate embeddings (chunked + averaged)
         emb_key = _hash_key("embeddings_chunked", run_query, model_name, backend, str(retmax))
         with st.spinner("🧠 Generating embeddings (chunked)..."):
+            # Learn semantic patterns from the texts being processed
+            try:
+                from rag_pipeline import _semantic_chunker
+                _semantic_chunker.learn_patterns_from_texts(texts)
+            except Exception as e:
+                print(f"Warning: Could not learn semantic patterns: {e}")
+            
             doc_embeddings = cached_embeddings_chunked(emb_key, texts, model_name, backend)
 
         # Build enhanced vector store
