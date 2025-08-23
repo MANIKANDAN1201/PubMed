@@ -1,4 +1,4 @@
-## PubMed Semantic Search
+## PubMed Semantic Search(TEAM 8)
 
 This Streamlit app enables advanced semantic and hybrid search over PubMed biomedical literature. It leverages transformer-based models (Gemini, Sentence Transformers, PubMedBERT, BioBERT), FAISS for semantic search, TF-IDF for keyword search, and intelligent reranking. The app supports query expansion with medical synonyms and MeSH terms, persistent vector index caching, and modern UI.
 
