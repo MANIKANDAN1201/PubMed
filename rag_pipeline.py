@@ -3,269 +3,117 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 import os
 import re
-import json
 import numpy as np
-from collections import Counter
 
 from bs4 import BeautifulSoup 
-from langchain.text_splitter import RecursiveCharacterTextSplitter  
 from langchain_community.vectorstores import FAISS as LCFAISS 
 from langchain_community.embeddings import HuggingFaceEmbeddings 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI 
 
-class PubMedSemanticChunker:
+def ultra_fast_chunking(text: str, chunk_size: int = 800, chunk_overlap: int = 100) -> List[str]:
     """
-    Data-driven semantic chunking for PubMed literature.
-    Uses cached MeSH terms and learns patterns from the data itself.
+    Ultra-fast chunking optimized for PubMed abstracts.
+    Uses sentence-based splitting with character fallback.
     """
+    if not text or len(text.strip()) == 0:
+        return []
     
-    def __init__(self):
-        self.mesh_terms = set()
-        self.learned_patterns = set()
-        self._load_mesh_terms()
+    # For PubMed abstracts (typically 150-300 words), no chunking needed
+    if len(text) <= chunk_size:
+        return [text.strip()]
     
-    def _load_mesh_terms(self):
-        """Load MeSH terms from cache with fallback to minimal terms."""
-        try:
-            cache_file = "mesh_terms_cache.json"
-            
-            # Try to load from cache
-            if os.path.exists(cache_file):
-                with open(cache_file, 'r') as f:
-                    self.mesh_terms = set(json.load(f))
-                print(f"Loaded {len(self.mesh_terms)} MeSH terms from cache (fast startup)")
-                return
-            
-            # If no cache exists, use minimal fallback terms
-            print("No cache found. Using minimal fallback terms...")
-            self.mesh_terms = set([
-                "diabetes mellitus", "myocardial infarction", "hypertension", 
-                "obesity", "cancer", "heart failure", "stroke", "asthma",
-                "arthritis", "depression", "anxiety", "alzheimer disease",
-                "parkinson disease", "multiple sclerosis", "epilepsy",
-                "clinical trial", "randomized controlled trial", "cohort study",
-                "meta-analysis", "systematic review", "blood pressure",
-                "body mass index", "chemotherapy", "surgery", "antibiotics"
-            ])
-            
-        except Exception as e:
-            print(f"Warning: Could not load MeSH terms: {e}")
-            # Minimal fallback
-            self.mesh_terms = set([
-                "diabetes mellitus", "myocardial infarction", "hypertension", 
-                "obesity", "cancer", "heart failure", "stroke", "asthma"
-            ])
+    # Try sentence-based splitting first
+    sentences = re.split(r'(?<=[.!?])\s+', text)
     
-    def learn_patterns_from_texts(self, texts: List[str]):
-        """Learn semantic patterns from the actual texts being processed."""
-        if not texts:
-            return
-        
-        # Extract potential multi-word terms using frequency analysis
-        word_pairs = []
-        word_triplets = []
-        
-        for text in texts:
-            words = text.lower().split()
-            
-            # Extract word pairs
-            for i in range(len(words) - 1):
-                pair = f"{words[i]} {words[i+1]}"
-                word_pairs.append(pair)
-            
-            # Extract word triplets
-            for i in range(len(words) - 2):
-                triplet = f"{words[i]} {words[i+1]} {words[i+2]}"
-                word_triplets.append(triplet)
-        
-        # Find frequent patterns
-        pair_counts = Counter(word_pairs)
-        triplet_counts = Counter(word_triplets)
-        
-        # Add frequent patterns to learned patterns
-        for pair, count in pair_counts.items():
-            if count >= 2 and len(pair.split()) == 2:  # At least 2 occurrences
-                self.learned_patterns.add(pair)
-        
-        for triplet, count in triplet_counts.items():
-            if count >= 2 and len(triplet.split()) == 3:  # At least 2 occurrences
-                self.learned_patterns.add(triplet)
+    if len(sentences) <= 1:
+        # Single sentence, use character-based chunking
+        return make_text_chunks(text, chunk_size, chunk_overlap)
     
-    def get_semantic_patterns(self) -> List[str]:
-        """Get all semantic patterns (MeSH + learned)."""
-        all_patterns = list(self.mesh_terms) + list(self.learned_patterns)
-        # Filter out very short patterns
-        return [p for p in all_patterns if len(p.split()) >= 2 and len(p) > 3]
+    chunks = []
+    current_chunk = ""
     
-    def semantic_chunk(self, text: str, chunk_size: int = 2000, chunk_overlap: int = 300) -> List[str]:
-        """
-        Semantic chunking using cached MeSH terms and learned patterns.
-        """
-        if not text or len(text.strip()) == 0:
-            return []
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
         
-        # Get current semantic patterns
-        semantic_patterns = self.get_semantic_patterns()
-        
-        # Split by paragraphs first
-        paragraphs = text.split('\n\n')
-        chunks = []
-        current_chunk = ""
-        
-        for paragraph in paragraphs:
-            paragraph = paragraph.strip()
-            if not paragraph:
-                continue
-                
-            # If adding this paragraph would exceed chunk size, finalize current chunk
-            if len(current_chunk) + len(paragraph) > chunk_size and current_chunk:
-                chunks.append(current_chunk.strip())
-                # Start new chunk with overlap
-                if chunk_overlap > 0:
-                    # Find the last sentence boundary within overlap
-                    overlap_text = current_chunk[-chunk_overlap:]
-                    last_sentence = re.split(r'[.!?]\s+', overlap_text)[-1]
-                    current_chunk = last_sentence + " " + paragraph
-                else:
-                    current_chunk = paragraph
-            else:
-                if current_chunk:
-                    current_chunk += "\n\n" + paragraph
-                else:
-                    current_chunk = paragraph
-        
-        # Add the last chunk if it exists
-        if current_chunk.strip():
+        # If adding this sentence would exceed chunk size, finalize current chunk
+        if len(current_chunk) + len(sentence) > chunk_size and current_chunk:
             chunks.append(current_chunk.strip())
-        
-        # If we have chunks that are too large, split them further
-        final_chunks = []
-        for chunk in chunks:
-            if len(chunk) <= chunk_size:
-                final_chunks.append(chunk)
+            current_chunk = sentence
+        else:
+            if current_chunk:
+                current_chunk += " " + sentence
             else:
-                # Split large chunks by sentences
-                sentences = re.split(r'(?<=[.!?])\s+', chunk)
-                current_sentence_chunk = ""
-                
-                for sentence in sentences:
-                    sentence = sentence.strip()
-                    if not sentence:
-                        continue
-                        
-                    # Check if adding this sentence would exceed chunk size
-                    if len(current_sentence_chunk) + len(sentence) > chunk_size and current_sentence_chunk:
-                        final_chunks.append(current_sentence_chunk.strip())
-                        # Start new chunk with overlap
-                        if chunk_overlap > 0:
-                            overlap_text = current_sentence_chunk[-chunk_overlap:]
-                            last_part = re.split(r'[.!?]\s+', overlap_text)[-1]
-                            current_sentence_chunk = last_part + " " + sentence
-                        else:
-                            current_sentence_chunk = sentence
-                    else:
-                        if current_sentence_chunk:
-                            current_sentence_chunk += " " + sentence
-                        else:
-                            current_sentence_chunk = sentence
-                
-                # Add the last sentence chunk
-                if current_sentence_chunk.strip():
-                    final_chunks.append(current_sentence_chunk.strip())
-        
-        # If we still have chunks that are too large, use the original RecursiveCharacterTextSplitter as fallback
-        final_final_chunks = []
-        for chunk in final_chunks:
-            if len(chunk) <= chunk_size:
-                final_final_chunks.append(chunk)
-            else:
-                # Fallback to original method for very large chunks
-                splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap,
-                    separators=["\n\n", "\n", ". ", ".", " "]
-                )
-                sub_chunks = splitter.split_text(chunk)
-                final_final_chunks.extend(sub_chunks)
-        
-        return final_final_chunks
+                current_chunk = sentence
     
-    def get_cache_status(self):
-        """Get information about the current cache status."""
-        try:
-            cache_file = "mesh_terms_cache.json"
-            metadata_file = "mesh_terms_metadata.json"
-            
-            status = {
-                'cache_exists': os.path.exists(cache_file),
-                'metadata_exists': os.path.exists(metadata_file),
-                'total_terms': len(self.mesh_terms),
-                'learned_patterns': len(self.learned_patterns)
-            }
-            
-            if os.path.exists(metadata_file):
-                with open(metadata_file, 'r') as f:
-                    metadata = json.load(f)
-                status['sources'] = metadata.get('sources', [])
-                status['version'] = metadata.get('version', 'unknown')
-            
-            return status
-            
-        except Exception as e:
-            print(f"Error getting cache status: {e}")
-            return {'error': str(e)}
+    # Add the last chunk
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+    
+    # If any chunk is too large, use character-based chunking for that chunk
+    final_chunks = []
+    for chunk in chunks:
+        if len(chunk) <= chunk_size:
+            final_chunks.append(chunk)
+        else:
+            # Fallback to character-based chunking for large chunks
+            sub_chunks = make_text_chunks(chunk, chunk_size, chunk_overlap)
+            final_chunks.extend(sub_chunks)
+    
+    return final_chunks if final_chunks else [text.strip()]
 
-# Global chunker instance
-_semantic_chunker = PubMedSemanticChunker()
+def make_text_chunks(text: str, chunk_size: int = 800, chunk_overlap: int = 100) -> List[str]:
+    """
+    Fast character-based chunking with simple sentence boundary detection.
+    """
+    if not text or len(text.strip()) == 0:
+        return []
+    
+    # For small texts, return as-is
+    if len(text) <= chunk_size:
+        return [text.strip()]
+    
+    # Simple character-based chunking with overlap
+    chunks = []
+    start = 0
+    
+    while start < len(text):
+        end = start + chunk_size
+        
+        # Try to find a sentence boundary within the last 50 characters
+        if start > 0 and end < len(text):
+            search_start = max(start, end - 50)
+            search_text = text[search_start:end]
+            
+            # Find the last sentence ending
+            for i in range(len(search_text) - 1, -1, -1):
+                if search_text[i] in '.!?':
+                    end = search_start + i + 1
+                    break
+        
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        
+        # Move to next chunk with overlap
+        start = end - chunk_overlap
+        if start >= len(text):
+            break
+    
+    return chunks if chunks else [text.strip()]
 
 def semantic_chunking(text: str, chunk_size: int = 2000, chunk_overlap: int = 300) -> List[str]:
     """
-    Semantic chunking that learns patterns from data and uses MeSH terms.
-    
-    Args:
-        text: Input text to chunk
-        chunk_size: Target chunk size in characters
-        chunk_overlap: Overlap between chunks in characters
-    
-    Returns:
-        List of semantically coherent chunks
+    Fast semantic chunking - just calls ultra_fast_chunking.
     """
-    return _semantic_chunker.semantic_chunk(text, chunk_size, chunk_overlap)
+    return ultra_fast_chunking(text, chunk_size, chunk_overlap)
 
-def make_text_chunks(text: str, chunk_size: int = 2000, chunk_overlap: int = 300) -> List[str]:
+def make_text_chunks_legacy(text: str, chunk_size: int = 2000, chunk_overlap: int = 300) -> List[str]:
     """
-    Enhanced text chunking with data-driven semantic awareness.
-    Uses semantic chunking first, falls back to RecursiveCharacterTextSplitter if needed.
+    Legacy function for compatibility - uses ultra_fast_chunking.
     """
-    try:
-        # Try semantic chunking first
-        semantic_chunks = semantic_chunking(text, chunk_size, chunk_overlap)
-        
-        # Validate chunks
-        valid_chunks = []
-        for chunk in semantic_chunks:
-            if chunk.strip() and len(chunk.strip()) > 50:  # Minimum meaningful chunk size
-                valid_chunks.append(chunk.strip())
-        
-        if valid_chunks:
-            return valid_chunks
-        
-        # Fallback to original method if semantic chunking fails
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            separators=["\n\n", "\n", ". ", ".", " "] 
-        )
-        return splitter.split_text(text)
-        
-    except Exception as e:
-        # If semantic chunking fails, use original method
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            separators=["\n\n", "\n", ". ", ".", " "] 
-        )
-        return splitter.split_text(text)
+    return ultra_fast_chunking(text, chunk_size, chunk_overlap)
 
 
 def fetch_full_text(article_url: str) -> Optional[str]:
