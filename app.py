@@ -343,14 +343,13 @@ def main() -> None:
                 st.error(f"❌ PubMed request failed: {e}")
                 return
 
-        # Extract texts for embedding
-        texts = []
+        # Extract texts for embedding (use full text for free articles)
+        from summary_cluster import prepare_texts_for_embedding
+        texts = prepare_texts_for_embedding(articles)
         metadata = []
         keep_indices = []
         for idx, art in enumerate(articles):
-            text = f"{art.title or ''} {art.abstract or ''}".strip()
-            if text:
-                texts.append(text)
+            if texts[idx]:
                 keep_indices.append(idx)
                 metadata.append({
                     "pmid": art.pmid,
@@ -653,7 +652,6 @@ def main() -> None:
                     "keyword_score": getattr(meta, 'keyword_score', 0),
                     "abstract": art.abstract,
                 })
-            
             if selected:
                 df = pd.DataFrame(selected)
                 st.download_button(
@@ -663,6 +661,30 @@ def main() -> None:
                     mime="text/csv",
                     use_container_width=True
                 )
+
+        # --- Gemini-powered summary section (using summary_cluster.py) ---
+        import summary_cluster
+        st.markdown("---")
+        st.subheader("Summary")
+
+        col_sum1, col_sum2 = st.columns([1, 1])
+        show_top_summary = col_sum1.button("Summarize Top Relevant Articles", key="btn_top_summary")
+        show_free_summary = col_sum2.button("Summarize Free Full-Text Articles", key="btn_free_summary")
+
+        if show_top_summary:
+            st.markdown("**Summary of Top Relevant Articles (Abstracts/Full Text):**")
+            with st.spinner("Generating summary..."):
+                summary_top = summary_cluster.summarize_top_articles(sorted_results, results['query'], top_n=5)
+            st.info(summary_top)
+
+        if show_free_summary:
+            st.markdown("**Summary of Free Full-Text Articles:**")
+            with st.spinner("Generating summary..."):
+                summary_free = summary_cluster.summarize_free_full_texts(sorted_results, results['query'])
+            if summary_free:
+                st.info(summary_free)
+            else:
+                st.markdown("*No free full-text articles available for summary.*")
 
     else:
         st.info("💡 Enter a medical query and press Search to begin your research journey!")
