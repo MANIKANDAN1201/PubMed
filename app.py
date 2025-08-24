@@ -12,7 +12,7 @@ import pandas as pd
 
 from embeddings import TextEmbedder
 from pubmed_fetcher import PubMedArticle, fetch_pubmed_articles
-from improved_vector_store import ImprovedVectorStore
+from chroma_vector_store import ChromaVectorStore
 from rag_pipeline import ultra_fast_chunking
 from query_processing import expand_query
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -376,7 +376,7 @@ def main() -> None:
 
         # Build enhanced vector store
         with st.spinner("🔧 Building hybrid search index..."):
-            vector_store = ImprovedVectorStore()
+            vector_store = ChromaVectorStore()
             # Fixed, simple weights
             vector_store.semantic_weight = 0.8
             vector_store.keyword_weight = 0.2
