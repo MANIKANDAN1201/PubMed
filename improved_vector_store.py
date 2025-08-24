@@ -89,6 +89,13 @@ class ImprovedVectorStore:
             min_df=min_df,
             max_df=0.95
         )
+        if len(texts) < 5:  
+    # very small dataset
+            self.tfidf_vectorizer = TfidfVectorizer(min_df=1, max_df=1.0)
+        else:
+    # normal dataset
+            self.tfidf_vectorizer = TfidfVectorizer(min_df=0.01, max_df=0.9)
+
         self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(texts)
         
         print(f"Built hybrid index: {embeddings.shape[0]} documents, {embeddings.shape[1]} dimensions")

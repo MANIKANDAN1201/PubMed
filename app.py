@@ -136,8 +136,21 @@ def get_embedder(model_name: str, backend: str) -> TextEmbedder:
     return TextEmbedder(model_name=model_name, use_sentence_transformers=use_st)
 
 @st.cache_data(show_spinner=False)
-def cached_fetch_pubmed(query: str, retmax: int, email: Optional[str], api_key: Optional[str]) -> List[PubMedArticle]:
-    return fetch_pubmed_articles(query=query, retmax=retmax, email=email, api_key=api_key)
+def cached_fetch_pubmed(
+    query: str,
+    retmax: int,
+    email: Optional[str],
+    api_key: Optional[str],
+    free_only: free_only,   # <--- NEW
+) -> List[PubMedArticle]:
+    return fetch_pubmed_articles(
+        query=query,
+        retmax=retmax,
+        email=email,
+        api_key=api_key,
+        free_only=free_only,   # <--- pass through
+    )
+
 
 @st.cache_data(show_spinner=False)
 def cached_embeddings_chunked(
@@ -191,7 +204,7 @@ def cached_embeddings_chunked(
     elif model_name.startswith("sentence-transformers/"):
         # Use Sentence Transformers directly, with local caching
         try:
-            from embeddings import get_embedding_model
+            from backend.embeddings import get_embedding_model
             model = get_embedding_model(model_name, local_base_dir="models")
             embeddings = model.encode(flat_texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
             flat_arr = np.array(embeddings, dtype=np.float32)
@@ -263,6 +276,8 @@ def main() -> None:
         expand = st.checkbox("Expand query with synonyms", value=True, help="Use medical synonyms for better coverage")
         use_reranking = st.checkbox("Enable intelligent reranking", value=True, help="Boost recent, high-impact papers")
         use_flashrank = st.sidebar.checkbox("Use Langchain's FlashRank reranker", value=False)
+        free_only = st.checkbox("Show only FREE full-text articles?", value=False)
+
 
         
         st.divider()
@@ -308,7 +323,7 @@ def main() -> None:
         # Fetch articles
         with st.spinner("📚 Fetching PubMed articles..."):
             try:
-                articles = cached_fetch_pubmed(run_query, retmax, email_effective, None)
+                articles = cached_fetch_pubmed(run_query, retmax, email_effective, None,free_only,)
             except Exception as e:
                 st.error(f"❌ PubMed request failed: {e}")
                 return
@@ -402,7 +417,7 @@ def main() -> None:
                         query_embedding = ensure_query_shape(q_vec, doc_embeddings.shape[1])
             elif model_name.startswith("sentence-transformers/"):
                 try:
-                    from embeddings import get_embedding_model
+                    from backend.embeddings import get_embedding_model
                     model = get_embedding_model(model_name, local_base_dir="models")
                     q_vec = model.encode([query], convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
                     query_embedding = ensure_query_shape(q_vec, doc_embeddings.shape[1])
