@@ -21,6 +21,9 @@ import os
 from dotenv import load_dotenv
 import asyncio
 
+# Import chatbot functionality
+from qa_chatbot import initialize_chat_session, render_chatbot_interface
+
 # Load environment variables (e.g., GOOGLE_API_KEY)
 load_dotenv()
 
@@ -662,29 +665,17 @@ def main() -> None:
                     use_container_width=True
                 )
 
-        # --- Gemini-powered summary section (using summary_cluster.py) ---
-        import summary_cluster
+        # Initialize chat session
+        initialize_chat_session()
+        
+        # Store current articles for chatbot
+        st.session_state.current_articles = results['articles']
+        
+        # Chatbot Interface
         st.markdown("---")
-        st.subheader("Summary")
-
-        col_sum1, col_sum2 = st.columns([1, 1])
-        show_top_summary = col_sum1.button("Summarize Top Relevant Articles", key="btn_top_summary")
-        show_free_summary = col_sum2.button("Summarize Free Full-Text Articles", key="btn_free_summary")
-
-        if show_top_summary:
-            st.markdown("**Summary of Top Relevant Articles (Abstracts/Full Text):**")
-            with st.spinner("Generating summary..."):
-                summary_top = summary_cluster.summarize_top_articles(sorted_results, results['query'], top_n=5)
-            st.info(summary_top)
-
-        if show_free_summary:
-            st.markdown("**Summary of Free Full-Text Articles:**")
-            with st.spinner("Generating summary..."):
-                summary_free = summary_cluster.summarize_free_full_texts(sorted_results, results['query'])
-            if summary_free:
-                st.info(summary_free)
-            else:
-                st.markdown("*No free full-text articles available for summary.*")
+        st.subheader("Research Assistant Chatbot")
+        
+        render_chatbot_interface()
 
     else:
         st.info("💡 Enter a medical query and press Search to begin your research journey!")

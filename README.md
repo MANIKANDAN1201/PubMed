@@ -11,6 +11,7 @@ This Streamlit app enables advanced semantic and hybrid search over PubMed biome
 - **Persistent Indexing:** Saves embeddings and indices for fast reuse
 - **Enhanced UI:** Card-style results, download options, index statistics
 - **Free Full-Text Detection:** PMC and Unpaywall integration
+- **Research Assistant Chatbot:** AI-powered conversational interface using Ollama models
 
 ### Requirements
 
@@ -41,6 +42,33 @@ This Streamlit app enables advanced semantic and hybrid search over PubMed biome
    ```
    streamlit run app.py
    ```
+
+### Chatbot Setup (Optional)
+
+The app includes a research assistant chatbot that uses Ollama models for conversational AI:
+
+1. **Install Ollama**
+   - Visit [ollama.ai](https://ollama.ai) and download for your platform
+   - Or use: `curl -fsSL https://ollama.ai/install.sh | sh`
+
+2. **Start Ollama service**
+   ```
+   ollama serve
+   ```
+
+3. **Download the model**
+   ```
+   ollama pull llama3.2
+   ```
+
+4. **Use the chatbot**
+   - Perform a PubMed search first
+   - Click on the "🤖 Research Assistant Chatbot" expandable panel
+   - Choose between:
+     - **💬 Ask Questions**: Interactive Q&A about the research findings
+     - **📋 Generate Summary**: Get a comprehensive summary of the top articles
+   - Adjust the number of abstracts to use as context
+   - Ask questions or generate summaries based on the retrieved research
 
 ### Usage
 
