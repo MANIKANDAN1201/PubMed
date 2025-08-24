@@ -21,6 +21,9 @@ import os
 from dotenv import load_dotenv
 import asyncio
 
+# Import chatbot functionality
+from qa_chatbot import initialize_chat_session, render_chatbot_interface
+
 # Load environment variables (e.g., GOOGLE_API_KEY)
 load_dotenv()
 
@@ -663,6 +666,18 @@ def main() -> None:
                     mime="text/csv",
                     use_container_width=True
                 )
+
+        # Initialize chat session
+        initialize_chat_session()
+        
+        # Store current articles for chatbot
+        st.session_state.current_articles = results['articles']
+        
+        # Chatbot Interface
+        st.markdown("---")
+        st.subheader("Research Assistant Chatbot")
+        
+        render_chatbot_interface()
 
     else:
         st.info("💡 Enter a medical query and press Search to begin your research journey!")
