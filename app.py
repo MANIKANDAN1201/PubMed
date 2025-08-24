@@ -1,5 +1,3 @@
-
-
 from __future__ import annotations
 
 from reranker_flashrank import flashrank_rerank
@@ -15,7 +13,7 @@ import pandas as pd
 from embeddings import TextEmbedder
 from pubmed_fetcher import PubMedArticle, fetch_pubmed_articles
 from improved_vector_store import ImprovedVectorStore
-from rag_pipeline import make_text_chunks
+from rag_pipeline import ultra_fast_chunking
 from query_processing import expand_query
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import google.generativeai as genai  
@@ -158,14 +156,14 @@ def cached_embeddings_chunked(
     texts: List[str],
     model_name: str,
     backend: str,
-    chunk_size: int = 1200,
-    chunk_overlap: int = 200,
+    chunk_size: int = 800,      # Smaller chunks for abstracts
+    chunk_overlap: int = 100,   # Less overlap for speed
 ) -> np.ndarray:
     # Prepare chunked texts per document
     chunked: List[List[str]] = []
     for t in texts:
         t_str = t if isinstance(t, str) else str(t)
-        chunks = make_text_chunks(t_str, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        chunks = ultra_fast_chunking(t_str, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         chunked.append(chunks if len(chunks) > 0 else [t_str])
 
     # Flatten for embedding
@@ -279,7 +277,6 @@ def main() -> None:
         free_only = st.checkbox("Show only FREE full-text articles?", value=False)
 
 
-        
         st.divider()
         
         st.subheader("💾 Persistence")
@@ -293,12 +290,29 @@ def main() -> None:
             st.success("Cache cleared successfully!")
 
     # Main search interface
-    col1, col2 = st.columns([3, 1])
+    st.markdown("---")
+    
+    # Search header with better styling
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+        <h2 style="color: white; margin: 0; text-align: center;">PubMed Semantic Search</h2>
+        <p style="color: white; text-align: center; margin: 10px 0 0 0; opacity: 0.9;">Advanced biomedical literature search with AI-powered semantic understanding</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Search input with better layout
+    col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
-        query = st.text_input("🔍 Enter your medical query", 
-                             placeholder="e.g., heart attack symptoms, diabetes complications, cancer immunotherapy")
+        query = st.text_input(
+            "Enter your medical query", 
+            placeholder="e.g., heart attack symptoms, diabetes complications, cancer immunotherapy",
+            help="Enter your medical research question or topic of interest"
+        )
     with col2:
-        do_search = st.button("🚀 Search", type="primary", use_container_width=True)
+        do_search = st.button("Search", type="primary", use_container_width=True)
+    with col3:
+        if st.button("Clear", use_container_width=True):
+            st.rerun()
 
     if do_search and query.strip():
         # Query expansion
@@ -321,36 +335,37 @@ def main() -> None:
         email_effective = (email or "").strip() or "pubmed-semantic@example.com"
 
         # Fetch articles
+<<<<<<< HEAD
         with st.spinner("📚 Fetching PubMed articles..."):
             try:
                 articles = cached_fetch_pubmed(run_query, retmax, email_effective, None,free_only,)
             except Exception as e:
                 st.error(f"❌ PubMed request failed: {e}")
+=======
+        with st.spinner("🔍 Fetching PubMed articles..."):
+            articles = fetch_pubmed_articles(run_query, retmax=retmax, email=email_effective, api_key=None)
+            if not articles:
+                st.error("❌ No articles found. Try a different query.")
+>>>>>>> 24336253bae80fab4fb0464d4ead68538c64afc0
                 return
 
-        if not articles:
-            st.warning("⚠️ No results from PubMed. Try a different query.")
-            return
-
-        st.success(f"✅ Retrieved {len(articles)} articles from PubMed")
-
-        # Prepare texts and metadata
-        texts: List[str] = []
-        keep_indices: List[int] = []
-        metadata: List[Dict] = []
-        
+        # Extract texts for embedding
+        texts = []
+        metadata = []
+        keep_indices = []
         for idx, art in enumerate(articles):
-            if isinstance(art.abstract, str) and art.abstract.strip():
-                texts.append(art.abstract.strip())
+            text = f"{art.title or ''} {art.abstract or ''}".strip()
+            if text:
+                texts.append(text)
                 keep_indices.append(idx)
                 metadata.append({
-                    'title': art.title,
-                    'abstract': art.abstract,
-                    'pmid': art.pmid,
-                    'url': art.url,
-                    'journal': art.journal,
-                    'year': art.year,
-                    'authors': art.authors
+                    "pmid": art.pmid,
+                    "title": art.title,
+                    "journal": art.journal,
+                    "year": art.year,
+                    "authors": art.authors,
+                    "url": art.url,
+                    "doi": art.doi
                 })
 
         if not texts:
@@ -457,33 +472,114 @@ def main() -> None:
                         result_metadata=result_metadata,
                     )
 
-                    # Show top 5 titles after rerank
-                    st.write("🔸 After FlashRank (top 5):", [
+                    st.write("🔹 After FlashRank (top 5):", [
                         m.get("title") if isinstance(m, dict) else getattr(m, "title", "") 
                         for m in result_metadata[:5]
                     ])
 
-                    st.info("Results reranked with FlashRank ✅")
                 except Exception as e:
                     st.warning(f"FlashRank rerank failed: {e}")
 
+        # Store results in session state
+        st.session_state.search_results = {
+            'scores': scores,
+            'indices': indices,
+            'result_metadata': result_metadata,
+            'articles': articles,
+            'keep_indices': keep_indices,
+            'texts': texts,
+            'query': query,
+            'use_reranking': use_reranking
+        }
 
-
+    # Display results if available in session state
+    if 'search_results' in st.session_state:
+        results = st.session_state.search_results
+        
         # Display results with enhanced UI
-        st.subheader(f"🎯 Top {len(scores)} Results")
-        st.info(f"📊 Showing results from {len(texts)} embedded abstracts")
+        st.subheader(f"Search Results")
+        st.info(f"Showing results from {len(results['texts'])} embedded abstracts")
 
-        # Show index statistics
-        stats = vector_store.get_index_stats()
-        with st.expander("📈 Index Statistics"):
-            st.json(stats)
+        # Sort controls at the top of results
+        st.markdown("### Sort Results")
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            sort_by = st.selectbox(
+                "Sort by",
+                options=[
+                    "relevance_score",
+                    "publication_date", 
+                    "journal_name",
+                    "title_alphabetical",
+                    "semantic_score",
+                    "keyword_score"
+                ],
+                format_func=lambda x: {
+                    "relevance_score": "Relevance Score",
+                    "publication_date": "Publication Date", 
+                    "journal_name": "Journal Name",
+                    "title_alphabetical": "Title (A-Z)",
+                    "semantic_score": "Semantic Score",
+                    "keyword_score": "Keyword Score"
+                }[x],
+                key="sort_by"
+            )
+        
+        with col2:
+            sort_order = st.selectbox(
+                "Order",
+                options=["desc", "asc"],
+                format_func=lambda x: "Descending" if x == "desc" else "Ascending",
+                key="sort_order"
+            )
 
-        for rank, (score, idx, meta) in enumerate(zip(scores, indices, result_metadata), start=1):
-            if idx < 0 or idx >= len(keep_indices):
+        # Sort results based on user selection
+        sorted_results = []
+        for score, idx, meta in zip(results['scores'], results['indices'], results['result_metadata']):
+            if idx < 0 or idx >= len(results['keep_indices']):
                 continue
-                
-            global_idx = keep_indices[idx]
-            art = articles[global_idx]
+            global_idx = results['keep_indices'][idx]
+            art = results['articles'][global_idx]
+            
+            # Prepare sorting data
+            sort_data = {
+                "score": score,
+                "idx": idx,
+                "meta": meta,
+                "art": art,
+                "relevance_score": float(score),
+                "publication_date": art.year or "0",
+                "journal_name": art.journal or "",
+                "title_alphabetical": art.title or "",
+                "semantic_score": getattr(meta, 'semantic_score', 0),
+                "keyword_score": getattr(meta, 'keyword_score', 0)
+            }
+            sorted_results.append(sort_data)
+        
+        # Sort the results
+        reverse_sort = (sort_order == "desc")
+        if sort_by == "relevance_score":
+            sorted_results.sort(key=lambda x: x["relevance_score"], reverse=reverse_sort)
+        elif sort_by == "publication_date":
+            sorted_results.sort(key=lambda x: int(x["publication_date"]) if x["publication_date"].isdigit() else 0, reverse=reverse_sort)
+        elif sort_by == "journal_name":
+            sorted_results.sort(key=lambda x: x["journal_name"].lower(), reverse=reverse_sort)
+        elif sort_by == "title_alphabetical":
+            sorted_results.sort(key=lambda x: x["title_alphabetical"].lower(), reverse=reverse_sort)
+        elif sort_by == "semantic_score":
+            sorted_results.sort(key=lambda x: x["semantic_score"], reverse=reverse_sort)
+        elif sort_by == "keyword_score":
+            sorted_results.sort(key=lambda x: x["keyword_score"], reverse=reverse_sort)
+
+        st.markdown("---")
+        st.subheader("Search Results")
+
+        # Display sorted results
+        for rank, result in enumerate(sorted_results, start=1):
+            art = result["art"]
+            score = result["score"]
+            meta = result["meta"]
 
             title = art.title or "Untitled"
             abstract = art.abstract or ""
@@ -493,18 +589,18 @@ def main() -> None:
             # Enhanced metadata display
             meta_parts: List[str] = []
             if art.journal:
-                meta_parts.append(f"📚 {art.journal}")
+                meta_parts.append(f"{art.journal}")
             if art.year:
-                meta_parts.append(f"📅 {art.year}")
+                meta_parts.append(f"{art.year}")
             if art.authors:
                 authors_text = ", ".join(art.authors[:2])
                 if len(art.authors) > 2:
                     authors_text += f" et al. ({len(art.authors)} total)"
-                meta_parts.append(f"👥 {authors_text}")
+                meta_parts.append(f"{authors_text}")
             if art.doi:
-                meta_parts.append(f"📄 DOI: {art.doi}")
+                meta_parts.append(f"DOI: {art.doi}")
             if getattr(art, 'is_free', False):
-                meta_parts.append("🆓 Free full text")
+                meta_parts.append("Free full text")
 
             # Score breakdown
             semantic_score = getattr(meta, 'semantic_score', 0)
@@ -513,8 +609,13 @@ def main() -> None:
             st.markdown(
                 f"""
                 <div class="result-card">
-                    <div class="result-title">
-                        <a href="{url}" target="_blank">{title}</a>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div class="result-title">
+                            <a href="{url}" target="_blank">{title}</a>
+                        </div>
+                        <div style="background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; color: #666;">
+                            #{rank}
+                        </div>
                     </div>
                     <div class="result-meta">
                         {' • '.join(meta_parts)}
@@ -525,7 +626,7 @@ def main() -> None:
                         <br>
                         <span class="metric-badge semantic-badge">Semantic: {semantic_score:.3f}</span>
                         <span class="metric-badge keyword-badge">Keyword: {keyword_score:.3f}</span>
-                        <span class="metric-badge rerank-badge">Reranked: {'Yes' if use_reranking else 'No'}</span>
+                        <span class="metric-badge rerank-badge">Reranked: {'Yes' if results['use_reranking'] else 'No'}</span>
                     </div>
                 </div>
                 """,
@@ -535,19 +636,19 @@ def main() -> None:
             # Free full text link (if available)
             if getattr(art, 'is_free', False) and getattr(art, 'full_text_link', None):
                 st.markdown(f"Full text: [{art.full_text_link}]({art.full_text_link})")
-
-            # Chat UI removed as per current requirement
+            
+            # Add spacing between results
+            st.markdown("<br>", unsafe_allow_html=True)
 
         # Enhanced CSV download
-        if len(scores) > 0:
+        if len(sorted_results) > 0:
             selected = []
-            for score, idx, meta in zip(scores, indices, result_metadata):
-                if idx < 0 or idx >= len(keep_indices):
-                    continue
-                global_idx = keep_indices[idx]
-                art = articles[global_idx]
+            for rank, result in enumerate(sorted_results, start=1):
+                art = result["art"]
+                score = result["score"]
+                meta = result["meta"]
                 selected.append({
-                    "rank": len(selected) + 1,
+                    "rank": rank,
                     "pmid": art.pmid,
                     "title": art.title,
                     "journal": art.journal or "",
@@ -562,10 +663,11 @@ def main() -> None:
             if selected:
                 df = pd.DataFrame(selected)
                 st.download_button(
-                    label="📥 Download Results (CSV)",
+                    label="Download Results (CSV)",
                     data=df.to_csv(index=False).encode("utf-8"),
-                    file_name=f"pubmed_enhanced_results_{query.replace(' ', '_')[:30]}.csv",
+                    file_name=f"pubmed_enhanced_results_{results['query'].replace(' ', '_')[:30]}.csv",
                     mime="text/csv",
+                    use_container_width=True
                 )
 
     else:

@@ -2,14 +2,120 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
 import os
+import re
+import numpy as np
 
 from bs4 import BeautifulSoup 
-import requests
-
-from langchain.text_splitter import RecursiveCharacterTextSplitter  
 from langchain_community.vectorstores import FAISS as LCFAISS 
 from langchain_community.embeddings import HuggingFaceEmbeddings 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI 
+
+def ultra_fast_chunking(text: str, chunk_size: int = 800, chunk_overlap: int = 100) -> List[str]:
+    """
+    Ultra-fast chunking optimized for PubMed abstracts.
+    Uses sentence-based splitting with character fallback.
+    """
+    if not text or len(text.strip()) == 0:
+        return []
+    
+    # For PubMed abstracts (typically 150-300 words), no chunking needed
+    if len(text) <= chunk_size:
+        return [text.strip()]
+    
+    # Try sentence-based splitting first
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    
+    if len(sentences) <= 1:
+        # Single sentence, use character-based chunking
+        return make_text_chunks(text, chunk_size, chunk_overlap)
+    
+    chunks = []
+    current_chunk = ""
+    
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        
+        # If adding this sentence would exceed chunk size, finalize current chunk
+        if len(current_chunk) + len(sentence) > chunk_size and current_chunk:
+            chunks.append(current_chunk.strip())
+            current_chunk = sentence
+        else:
+            if current_chunk:
+                current_chunk += " " + sentence
+            else:
+                current_chunk = sentence
+    
+    # Add the last chunk
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+    
+    # If any chunk is too large, use character-based chunking for that chunk
+    final_chunks = []
+    for chunk in chunks:
+        if len(chunk) <= chunk_size:
+            final_chunks.append(chunk)
+        else:
+            # Fallback to character-based chunking for large chunks
+            sub_chunks = make_text_chunks(chunk, chunk_size, chunk_overlap)
+            final_chunks.extend(sub_chunks)
+    
+    return final_chunks if final_chunks else [text.strip()]
+
+def make_text_chunks(text: str, chunk_size: int = 800, chunk_overlap: int = 100) -> List[str]:
+    """
+    Fast character-based chunking with simple sentence boundary detection.
+    """
+    if not text or len(text.strip()) == 0:
+        return []
+    
+    # For small texts, return as-is
+    if len(text) <= chunk_size:
+        return [text.strip()]
+    
+    # Simple character-based chunking with overlap
+    chunks = []
+    start = 0
+    
+    while start < len(text):
+        end = start + chunk_size
+        
+        # Try to find a sentence boundary within the last 50 characters
+        if start > 0 and end < len(text):
+            search_start = max(start, end - 50)
+            search_text = text[search_start:end]
+            
+            # Find the last sentence ending
+            for i in range(len(search_text) - 1, -1, -1):
+                if search_text[i] in '.!?':
+                    end = search_start + i + 1
+                    break
+        
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        
+        # Move to next chunk with overlap
+        start = end - chunk_overlap
+        if start >= len(text):
+            break
+    
+    return chunks if chunks else [text.strip()]
+
+def semantic_chunking(text: str, chunk_size: int = 2000, chunk_overlap: int = 300) -> List[str]:
+    """
+    Fast semantic chunking - just calls ultra_fast_chunking.
+    """
+    return ultra_fast_chunking(text, chunk_size, chunk_overlap)
+
+def make_text_chunks_legacy(text: str, chunk_size: int = 2000, chunk_overlap: int = 300) -> List[str]:
+    """
+    Legacy function for compatibility - uses ultra_fast_chunking.
+    """
+    return ultra_fast_chunking(text, chunk_size, chunk_overlap)
+
+
 def fetch_full_text(article_url: str) -> Optional[str]:
     """
     Best effort fetch of full text from an article URL. Prioritizes PMC HTML pages.
@@ -41,14 +147,6 @@ def fetch_full_text(article_url: str) -> Optional[str]:
     except Exception:
         return None
 
-
-def make_text_chunks(text: str, chunk_size: int = 2000, chunk_overlap: int = 300) -> List[str]:
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        separators=["\n\n", "\n", ". ", ".", " "] 
-    )
-    return splitter.split_text(text)
 
 def build_embeddings(model_choice: str = "gemini", device: Optional[str] = None):
     """

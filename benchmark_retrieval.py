@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 from typing import List, Tuple
 
 import faiss
@@ -11,17 +12,79 @@ from backend.embeddings import get_embedding_model, encode_texts
 
 
 def semantic_chunk(text: str, max_len: int = 200) -> List[str]:
-    """Chunk a long context into smaller pieces for embedding.
-
-    Uses simple token-count (word) chunks with no overlap for speed.
+    """Enhanced semantic chunking that respects medical terminology and natural language boundaries.
+    
+    Uses semantic-aware splitting while maintaining the word-based approach for benchmarking.
     """
-    words = text.split()
+    if not text or len(text.strip()) == 0:
+        return []
+    
+    # Medical terminology patterns that should be kept together
+    medical_patterns = [
+        r'\b(?:heart attack|myocardial infarction|cardiac arrest)\b',
+        r'\b(?:type 1 diabetes|type 2 diabetes|diabetes mellitus)\b',
+        r'\b(?:blood pressure|hypertension|HTN)\b',
+        r'\b(?:body mass index|BMI|obesity)\b',
+        r'\b(?:air pollution|particulate matter|PM2\.5|PM10)\b',
+        r'\b(?:coronary artery disease|CAD)\b',
+        r'\b(?:chronic obstructive pulmonary disease|COPD)\b',
+        r'\b(?:rheumatoid arthritis|RA)\b',
+        r'\b(?:multiple sclerosis|MS)\b',
+        r'\b(?:Alzheimer\'s disease|dementia)\b',
+        r'\b(?:breast cancer|prostate cancer|lung cancer)\b',
+        r'\b(?:clinical trial|randomized controlled trial|RCT)\b',
+        r'\b(?:odds ratio|OR|relative risk|RR|hazard ratio|HR)\b',
+        r'\b(?:confidence interval|CI|p-value|statistical significance)\b',
+        r'\b(?:cohort study|case-control study|cross-sectional study)\b',
+        r'\b(?:systematic review|meta-analysis|meta analysis)\b',
+        r'\b(?:Food and Drug Administration|FDA)\b',
+        r'\b(?:World Health Organization|WHO)\b',
+        r'\b(?:Centers for Disease Control|CDC)\b',
+        r'\b(?:National Institutes of Health|NIH)\b'
+    ]
+    
+    # First, try to split by sentences to preserve semantic coherence
+    sentences = re.split(r'(?<=[.!?])\s+', text)
     chunks: List[str] = []
-    for i in range(0, len(words), max_len):
-        chunk = " ".join(words[i : i + max_len]).strip()
-        if chunk:
-            chunks.append(chunk)
-    return chunks
+    current_chunk = ""
+    
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+            
+        # Count words in current sentence
+        sentence_words = sentence.split()
+        
+        # If adding this sentence would exceed max_len, finalize current chunk
+        if len(current_chunk.split()) + len(sentence_words) > max_len and current_chunk:
+            chunks.append(current_chunk.strip())
+            current_chunk = sentence
+        else:
+            if current_chunk:
+                current_chunk += " " + sentence
+            else:
+                current_chunk = sentence
+    
+    # Add the last chunk if it exists
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+    
+    # If we have chunks that are too large, split them by words
+    final_chunks = []
+    for chunk in chunks:
+        if len(chunk.split()) <= max_len:
+            final_chunks.append(chunk)
+        else:
+            # Fallback to word-based splitting for very large chunks
+            words = chunk.split()
+            for i in range(0, len(words), max_len):
+                chunk_words = words[i : i + max_len]
+                chunk_text = " ".join(chunk_words).strip()
+                if chunk_text:
+                    final_chunks.append(chunk_text)
+    
+    return final_chunks
 
 
 def load_bioasq(bioasq_file: str) -> list:
