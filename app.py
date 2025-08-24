@@ -335,18 +335,11 @@ def main() -> None:
         email_effective = (email or "").strip() or "pubmed-semantic@example.com"
 
         # Fetch articles
-<<<<<<< HEAD
         with st.spinner("📚 Fetching PubMed articles..."):
             try:
                 articles = cached_fetch_pubmed(run_query, retmax, email_effective, None,free_only,)
             except Exception as e:
                 st.error(f"❌ PubMed request failed: {e}")
-=======
-        with st.spinner("🔍 Fetching PubMed articles..."):
-            articles = fetch_pubmed_articles(run_query, retmax=retmax, email=email_effective, api_key=None)
-            if not articles:
-                st.error("❌ No articles found. Try a different query.")
->>>>>>> 24336253bae80fab4fb0464d4ead68538c64afc0
                 return
 
         # Extract texts for embedding
