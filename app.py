@@ -21,6 +21,9 @@ import os
 from dotenv import load_dotenv
 import asyncio
 
+# Import chatbot functionality
+from qa_chatbot import initialize_chat_session, render_chatbot_interface
+
 # Load environment variables (e.g., GOOGLE_API_KEY)
 load_dotenv()
 
@@ -139,14 +142,14 @@ def cached_fetch_pubmed(
     retmax: int,
     email: Optional[str],
     api_key: Optional[str],
-    free_only: free_only,   # <--- NEW
+    free_only: Optional[bool],   # fixed type
 ) -> List[PubMedArticle]:
     return fetch_pubmed_articles(
         query=query,
         retmax=retmax,
         email=email,
         api_key=api_key,
-        free_only=free_only,   # <--- pass through
+        free_only=free_only,
     )
 
 
@@ -202,8 +205,9 @@ def cached_embeddings_chunked(
     elif model_name.startswith("sentence-transformers/"):
         # Use Sentence Transformers directly, with local caching
         try:
-            from backend.embeddings import get_embedding_model
-            model = get_embedding_model(model_name, local_base_dir="models")
+            # Use local sentence_transformers if available
+            from sentence_transformers import SentenceTransformer
+            model = SentenceTransformer(model_name, cache_folder="models")
             embeddings = model.encode(flat_texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
             flat_arr = np.array(embeddings, dtype=np.float32)
         except Exception as e:
@@ -342,14 +346,13 @@ def main() -> None:
                 st.error(f"❌ PubMed request failed: {e}")
                 return
 
-        # Extract texts for embedding
-        texts = []
+        # Extract texts for embedding (use full text for free articles)
+        from summary_cluster import prepare_texts_for_embedding
+        texts = prepare_texts_for_embedding(articles)
         metadata = []
         keep_indices = []
         for idx, art in enumerate(articles):
-            text = f"{art.title or ''} {art.abstract or ''}".strip()
-            if text:
-                texts.append(text)
+            if texts[idx]:
                 keep_indices.append(idx)
                 metadata.append({
                     "pmid": art.pmid,
@@ -425,8 +428,8 @@ def main() -> None:
                         query_embedding = ensure_query_shape(q_vec, doc_embeddings.shape[1])
             elif model_name.startswith("sentence-transformers/"):
                 try:
-                    from backend.embeddings import get_embedding_model
-                    model = get_embedding_model(model_name, local_base_dir="models")
+                    from sentence_transformers import SentenceTransformer
+                    model = SentenceTransformer(model_name, cache_folder="models")
                     q_vec = model.encode([query], convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
                     query_embedding = ensure_query_shape(q_vec, doc_embeddings.shape[1])
                 except Exception as e:
@@ -652,7 +655,6 @@ def main() -> None:
                     "keyword_score": getattr(meta, 'keyword_score', 0),
                     "abstract": art.abstract,
                 })
-            
             if selected:
                 df = pd.DataFrame(selected)
                 st.download_button(
@@ -662,6 +664,18 @@ def main() -> None:
                     mime="text/csv",
                     use_container_width=True
                 )
+
+        # Initialize chat session
+        initialize_chat_session()
+        
+        # Store current articles for chatbot
+        st.session_state.current_articles = results['articles']
+        
+        # Chatbot Interface
+        st.markdown("---")
+        st.subheader("Research Assistant Chatbot")
+        
+        render_chatbot_interface()
 
     else:
         st.info("💡 Enter a medical query and press Search to begin your research journey!")
