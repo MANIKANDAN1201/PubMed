@@ -139,14 +139,14 @@ def cached_fetch_pubmed(
     retmax: int,
     email: Optional[str],
     api_key: Optional[str],
-    free_only: free_only,   # <--- NEW
+    free_only: Optional[bool],   # fixed type
 ) -> List[PubMedArticle]:
     return fetch_pubmed_articles(
         query=query,
         retmax=retmax,
         email=email,
         api_key=api_key,
-        free_only=free_only,   # <--- pass through
+        free_only=free_only,
     )
 
 
@@ -202,8 +202,9 @@ def cached_embeddings_chunked(
     elif model_name.startswith("sentence-transformers/"):
         # Use Sentence Transformers directly, with local caching
         try:
-            from backend.embeddings import get_embedding_model
-            model = get_embedding_model(model_name, local_base_dir="models")
+            # Use local sentence_transformers if available
+            from sentence_transformers import SentenceTransformer
+            model = SentenceTransformer(model_name, cache_folder="models")
             embeddings = model.encode(flat_texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
             flat_arr = np.array(embeddings, dtype=np.float32)
         except Exception as e:
@@ -335,18 +336,11 @@ def main() -> None:
         email_effective = (email or "").strip() or "pubmed-semantic@example.com"
 
         # Fetch articles
-<<<<<<< HEAD
         with st.spinner("📚 Fetching PubMed articles..."):
             try:
                 articles = cached_fetch_pubmed(run_query, retmax, email_effective, None,free_only,)
             except Exception as e:
                 st.error(f"❌ PubMed request failed: {e}")
-=======
-        with st.spinner("🔍 Fetching PubMed articles..."):
-            articles = fetch_pubmed_articles(run_query, retmax=retmax, email=email_effective, api_key=None)
-            if not articles:
-                st.error("❌ No articles found. Try a different query.")
->>>>>>> 24336253bae80fab4fb0464d4ead68538c64afc0
                 return
 
         # Extract texts for embedding
@@ -432,8 +426,8 @@ def main() -> None:
                         query_embedding = ensure_query_shape(q_vec, doc_embeddings.shape[1])
             elif model_name.startswith("sentence-transformers/"):
                 try:
-                    from backend.embeddings import get_embedding_model
-                    model = get_embedding_model(model_name, local_base_dir="models")
+                    from sentence_transformers import SentenceTransformer
+                    model = SentenceTransformer(model_name, cache_folder="models")
                     q_vec = model.encode([query], convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
                     query_embedding = ensure_query_shape(q_vec, doc_embeddings.shape[1])
                 except Exception as e:
