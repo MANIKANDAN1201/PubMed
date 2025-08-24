@@ -230,16 +230,3 @@ def fetch_pubmed_articles(
         articles = [a for a in articles if a.is_free]
 
     return articles
-
-
-# -----------------
-# Example usage
-# -----------------
-if __name__ == "__main__":
-    results = fetch_pubmed_articles("breast cancer", retmax=5, email="your_email@example.com")
-    for art in results:
-        print(f"\nTitle: {art.title}")
-        print(f"PMID: {art.pmid}")
-        print(f"DOI: {art.doi}")
-        print(f"Free Source: {art.free_source}")
-        print(f"Link: {art.full_text_link}")
