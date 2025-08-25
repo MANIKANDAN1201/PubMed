@@ -57,8 +57,6 @@ class GeminiEmbedder:
         if not api_key:
             raise EnvironmentError("GOOGLE_API_KEY not set for Gemini embeddings")
         genai.configure(api_key=api_key)
-        # Map friendly name to actual API model id
-        # Keeping older naming consistent with user's request
         self._api_model = "models/embedding-001"
 
     def _batch(self, texts: List[str], batch_size: int = 64) -> List[List[str]]:
@@ -80,7 +78,6 @@ class GeminiEmbedder:
 
         results: List[np.ndarray] = []
         for chunk in self._batch(texts, batch_size=batch_size):
-            # google.generativeai embed_content supports a single string or list via loop
             embeddings: List[np.ndarray] = []
             for t in chunk:
                 resp = genai.embed_content(model=self._api_model, content=t)
@@ -112,7 +109,6 @@ def get_embedding_model(
     try:
         from sentence_transformers import SentenceTransformer
 
-        # Try loading from local cache first
         local_dir = _make_local_model_dir(local_base_dir, model_name)
         try:
             if any(local_dir.iterdir()):
@@ -120,7 +116,6 @@ def get_embedding_model(
         except Exception:
             pass
 
-        # Otherwise load from hub and persist locally for future runs
         model = SentenceTransformer(model_name)
         try:
             model.save(str(local_dir))
@@ -132,7 +127,6 @@ def get_embedding_model(
 
 
 def encode_texts(texts: List[str], model) -> np.ndarray:
-    """Encode texts using SentenceTransformer - simplified interface matching reference code"""
     emb = model.encode(texts, convert_to_numpy=True, normalize_embeddings=False, show_progress_bar=False)
     emb = _to_numpy(emb)
     return _l2_normalize(emb)
@@ -160,7 +154,6 @@ class TextEmbedder:
 
                 self._sbert_model = SentenceTransformer(self.model_name, device=self.device)
             except Exception:
-                # Fall back to Transformers if ST model is unavailable/incompatible
                 self.use_sentence_transformers = False
 
         if not self.use_sentence_transformers:

@@ -23,12 +23,9 @@ class PubMedArticle:
 
 
 def _extract_doi(entry: dict) -> Optional[str]:
-    """Extract DOI if available."""
     try:
         medline = entry.get("MedlineCitation", {})
         article = medline.get("Article", {})
-
-        # Option 1: ELocationID with EIdType = doi
         eids = article.get("ELocationID")
         if isinstance(eids, list):
             for eid in eids:
@@ -37,8 +34,6 @@ def _extract_doi(entry: dict) -> Optional[str]:
         elif isinstance(eids, dict):
             if eids.get("@EIdType", "").lower() == "doi":
                 return str(eids.get("#text")).strip()
-
-        # Option 2: PubmedData -> ArticleIdList
         pubmed_data = entry.get("PubmedData", {})
         id_list = pubmed_data.get("ArticleIdList") or []
         if isinstance(id_list, list):
@@ -54,18 +49,14 @@ def _extract_doi(entry: dict) -> Optional[str]:
 
 
 def _parse_article(entry: dict) -> Optional[PubMedArticle]:
-    """Convert XML entry to PubMedArticle object."""
     try:
         medline = entry.get("MedlineCitation", {})
         pmid_raw = medline.get("PMID")
         pmid = pmid_raw.get("#text") if isinstance(pmid_raw, dict) else pmid_raw
         if not pmid:
             return None
-
         article = medline.get("Article", {})
         title = article.get("ArticleTitle") or ""
-
-        # Handle abstract
         abstract_parts = article.get("Abstract", {}).get("AbstractText")
         abstract = ""
         if isinstance(abstract_parts, list):
@@ -74,16 +65,12 @@ def _parse_article(entry: dict) -> Optional[PubMedArticle]:
             abstract = abstract_parts
         elif abstract_parts:
             abstract = str(abstract_parts)
-
-        # Clean abstract
         abstract = re.sub(r"<[^>]+>", "", abstract or "")
         abstract = re.sub(r"\xa0", " ", abstract)
         abstract = re.sub(r"\s+", " ", abstract).strip()
-
         journal_info = article.get("Journal", {}).get("Title")
         pub_date = article.get("Journal", {}).get("JournalIssue", {}).get("PubDate", {})
         year = pub_date.get("Year") or pub_date.get("MedlineDate")
-
         authors_list = article.get("AuthorList") or []
         authors: List[str] = []
         for a in authors_list:
@@ -93,10 +80,8 @@ def _parse_article(entry: dict) -> Optional[PubMedArticle]:
                 authors.append(f"{fore} {last}")
             elif last:
                 authors.append(last)
-
         url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
         doi = _extract_doi(entry)
-
         return PubMedArticle(
             pmid=str(pmid),
             title=title if isinstance(title, str) else str(title),
@@ -113,14 +98,10 @@ def _parse_article(entry: dict) -> Optional[PubMedArticle]:
 
 
 def _enrich_full_text_info(articles: List[PubMedArticle], email: str) -> None:
-    """Mark articles as free if available in PMC or via Unpaywall."""
     if not articles:
         return
-
     pmids = [a.pmid for a in articles if a.pmid]
     pmid_to_article: Dict[str, PubMedArticle] = {a.pmid: a for a in articles}
-
-    # First: check PMC linking
     try:
         handle = Entrez.elink(dbfrom="pubmed", db="pmc", id=",".join(pmids))
         linksets = Entrez.read(handle)
@@ -150,10 +131,8 @@ def _enrich_full_text_info(articles: List[PubMedArticle], email: str) -> None:
                 continue
     except Exception:
         pass
-
-    # Second: check DOI via Unpaywall
     for art in articles:
-        if art.is_free:  # already covered by PMC
+        if art.is_free:
             continue
         if not art.doi:
             continue
@@ -185,48 +164,33 @@ def fetch_pubmed_articles(
     email: Optional[str] = None,
     api_key: Optional[str] = None,
     sort: str = "relevance",
-    free_only: bool = False,   # <-- NEW FLAG
+    free_only: bool = False,
 ) -> List[PubMedArticle]:
-    """
-    Fetch PubMed articles (title, abstract, url).
-    If free_only=True → returns only free articles (PMC, publisher, or Unpaywall).
-    If free_only=False → returns all articles, but marks free ones.
-    """
     effective_email = (email or "").strip() or "pubmed-semantic@example.com"
     Entrez.email = effective_email
     Entrez.tool = "pubmed-semantic-app"
     if api_key:
         Entrez.api_key = api_key
-
-    # Step 1: Search PubMed (do NOT apply free filter here)
     handle = Entrez.esearch(db="pubmed", term=query, retmax=retmax, sort=sort)
     record = Entrez.read(handle)
     handle.close()
-
     id_list = record.get("IdList", [])
     if not id_list:
         return []
-
-    # Step 2: Fetch article details
     handle = Entrez.efetch(db="pubmed", id=",".join(id_list), rettype="abstract", retmode="xml")
     fetch_record = Entrez.read(handle)
     handle.close()
-
-    # Step 3: Parse articles
     articles: List[PubMedArticle] = []
     for entry in fetch_record.get("PubmedArticle", []):
         parsed = _parse_article(entry)
         if parsed:
             articles.append(parsed)
-
-    # Step 4: Enrich with free info (PMC + Unpaywall)
     try:
         _enrich_full_text_info(articles, email or "")
     except Exception as e:
         print(f"Enrichment warning: {e}")
-
-    # Step 5: Filter if user wants only free ones
     if free_only:
         articles = [a for a in articles if a.is_free]
-
     return articles
+
+
