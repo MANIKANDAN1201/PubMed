@@ -1,8 +1,5 @@
 from typing import List, Dict, Any
-try:
-    from .logic.qa_chatbot import format_abstracts_for_context, create_chatbot_prompt, get_ollama_response, create_summary_prompt
-except Exception:
-    from ...qa_chatbot import format_abstracts_for_context, create_chatbot_prompt, get_ollama_response, create_summary_prompt
+from app.services.logic.qa_chatbot import format_abstracts_for_context, create_chatbot_prompt, get_ollama_response, create_summary_prompt
 
 
 def chat_answer(articles: List[Dict[str, Any]], question: str, top_n: int = 5) -> str:

@@ -1,25 +1,47 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PubMed Semantic Search</title>
+    <title>PubMed Research Assistant</title>
     <link rel="stylesheet" href="/static/css/styles.css" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   </head>
   <body>
-    <div class="container">
-      <h1>PubMed Semantic Search</h1>
-      <div class="grid">
-        <div class="card">
-          <h3>Settings</h3>
-          <label>NCBI Email <input id="email" placeholder="your.email@domain.com" /></label>
-          <label>Articles to fetch <input id="retmax" type="number" min="10" max="500" step="10" value="100" /></label>
-          <label>Top-N results <input id="topk" type="number" min="5" max="50" step="1" value="15" /></label>
-          <label><input id="free_only" type="checkbox" /> Free full-text only</label>
-          <label><input id="expand" type="checkbox" checked /> Expand query with synonyms</label>
-          <label><input id="use_reranking" type="checkbox" checked /> Enable reranking</label>
-          <label><input id="use_flashrank" type="checkbox" /> Use FlashRank reranker</label>
-          <label>Embedding model
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h3><i class="fas fa-cog"></i> Settings</h3>
+        <button id="closeSidebar" class="close-btn">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="sidebar-content">
+        <div class="setting-group">
+          <label class="setting-label">
+            <i class="fas fa-envelope"></i> NCBI Email
+            <input id="email" type="email" placeholder="your.email@domain.com" />
+          </label>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">
+            <i class="fas fa-file-alt"></i> Articles to fetch
+            <input id="retmax" type="number" min="10" max="500" step="10" value="100" />
+          </label>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">
+            <i class="fas fa-list-ol"></i> Top-N results
+            <input id="topk" type="number" min="5" max="50" step="1" value="15" />
+          </label>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">
+            <i class="fas fa-brain"></i> Embedding model
             <select id="model_name">
               <option value="gemini">Gemini (models/embedding-001)</option>
               <option value="sentence-transformers/all-MiniLM-L6-v2">Sentence Transformers (all-MiniLM-L6-v2)</option>
@@ -27,39 +49,143 @@
               <option value="dmis-lab/biobert-base-cased-v1.1">BioBERT</option>
             </select>
           </label>
-          <label>Index name <input id="index_name" value="pubmed_index" /></label>
         </div>
-        <div class="card stretch">
-          <h3>Search</h3>
-          <div class="panel">
-            <input id="query" placeholder="Enter your medical query" />
-            <button id="search">Search</button>
-            <button id="clear">Clear</button>
-          </div>
-          <div id="status"></div>
-          <div id="results"></div>
-          <div id="actions" class="actions hidden">
-            <button id="downloadCsv">Download CSV</button>
-          </div>
-        </div>
-      </div>
 
-      <div class="grid">
-        <div class="card">
-          <h3>Summary</h3>
-          <button id="generateSummary">Generate Research Summary</button>
-          <div id="summaryOut"></div>
+        <div class="setting-group">
+          <label class="setting-label">
+            <i class="fas fa-database"></i> Index name
+            <input id="index_name" value="pubmed_index" />
+          </label>
         </div>
-        <div class="card stretch">
-          <h3>Chatbot</h3>
-          <input id="chatInput" placeholder="Ask about the research findings..." />
-          <button id="sendQuestion">Send Question</button>
-          <div id="chatOut"></div>
+
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input id="free_only" type="checkbox" />
+            <span class="checkmark"></span>
+            <i class="fas fa-unlock"></i> Free full-text only
+          </label>
+
+          <label class="checkbox-label">
+            <input id="expand" type="checkbox" checked />
+            <span class="checkmark"></span>
+            <i class="fas fa-expand-arrows-alt"></i> Expand query with synonyms
+          </label>
+
+          <label class="checkbox-label">
+            <input id="use_reranking" type="checkbox" checked />
+            <span class="checkmark"></span>
+            <i class="fas fa-sort"></i> Enable reranking
+          </label>
+
+          <label class="checkbox-label">
+            <input id="use_flashrank" type="checkbox" />
+            <span class="checkmark"></span>
+            <i class="fas fa-bolt"></i> Use FlashRank reranker
+          </label>
         </div>
       </div>
     </div>
+
+    <!-- Main Content -->
+    <div id="mainContent" class="main-content">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-left">
+          <button id="sidebarToggle" class="sidebar-toggle">
+            <i class="fas fa-bars"></i>
+          </button>
+          <h1><i class="fas fa-microscope"></i> PubMed Research Assistant</h1>
+        </div>
+        <div class="header-right">
+          <div class="theme-toggle">
+            <button id="themeToggle">
+              <i class="fas fa-moon"></i>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Search Section -->
+      <section class="search-section">
+        <div class="search-container">
+          <div class="search-box">
+            <i class="fas fa-search search-icon"></i>
+            <input id="query" type="text" placeholder="Enter your medical research query..." />
+            <div class="search-actions">
+              <button id="search" class="btn-primary">
+                <i class="fas fa-search"></i> Search
+              </button>
+              <button id="clear" class="btn-secondary">
+                <i class="fas fa-times"></i> Clear
+              </button>
+            </div>
+          </div>
+          <div id="status" class="status-bar"></div>
+        </div>
+      </section>
+
+      <!-- Results and Tools Section -->
+      <div class="content-grid">
+        <!-- Search Results -->
+        <div class="results-panel">
+          <div class="panel-header">
+            <h2><i class="fas fa-list"></i> Search Results</h2>
+            <div id="actions" class="panel-actions hidden">
+              <button id="downloadCsv" class="btn-outline">
+                <i class="fas fa-download"></i> Export CSV
+              </button>
+            </div>
+          </div>
+          <div id="results" class="results-container"></div>
+        </div>
+
+        <!-- Tools Panel -->
+        <div class="tools-panel">
+          <!-- Summary Tool -->
+          <div class="tool-card summary-card">
+            <div class="tool-header">
+              <h3><i class="fas fa-file-text"></i> Research Summary</h3>
+              <button id="generateSummary" class="btn-tool">
+                <i class="fas fa-magic"></i> Generate
+              </button>
+            </div>
+            <div id="summaryOut" class="tool-output">
+              <div class="placeholder">
+                <i class="fas fa-lightbulb"></i>
+                <p>Generate an AI-powered summary of your search results to get key insights and findings.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chatbot Tool -->
+          <div class="tool-card chatbot-card">
+            <div class="tool-header">
+              <h3><i class="fas fa-robot"></i> Research Assistant</h3>
+            </div>
+            <div class="chat-container">
+              <div id="chatOut" class="chat-output">
+                <div class="placeholder">
+                  <i class="fas fa-comments"></i>
+                  <p>Ask questions about your research findings and get intelligent answers.</p>
+                </div>
+              </div>
+              <div class="chat-input-container">
+                <input id="chatInput" type="text" placeholder="Ask about the research findings..." />
+                <button id="sendQuestion" class="btn-chat">
+                  <i class="fas fa-paper-plane"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlay for mobile sidebar -->
+    <div id="overlay" class="overlay"></div>
+
     <script src="/static/js/scripts.js"></script>
   </body>
-  </html>
+</html>
 
 

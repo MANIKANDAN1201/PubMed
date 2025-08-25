@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
-from .logic.summary_cluster import AbstractEmbeddingSummarizer
-from .logic.pubmed_fetcher import PubMedArticle
+from app.services.logic.summary_cluster import AbstractEmbeddingSummarizer
+from app.services.logic.pubmed_fetcher import PubMedArticle
 
 
 def _dict_to_article(d: Dict[str, Any]) -> PubMedArticle:

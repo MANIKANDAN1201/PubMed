@@ -39,15 +39,18 @@ class ImprovedVectorStore:
         self.keyword_weight = 0.3
         
     def build_hybrid_index(
-        self, 
-        texts: List[str], 
+        self,
+        texts: List[str],
         embeddings: np.ndarray,
         metadata: List[Dict],
         index_type: str = "ivf"
     ) -> None:
+        # Validate embeddings shape
+        if embeddings is None or not hasattr(embeddings, 'shape') or len(embeddings.shape) != 2 or embeddings.shape[0] == 0 or embeddings.shape[1] == 0:
+            raise ValueError(f"Embeddings must be a non-empty 2D array. Got shape: {getattr(embeddings, 'shape', None)}")
         self.embeddings = embeddings.astype(np.float32)
         self.article_metadata = metadata
-        
+
         if index_type == "flat":
             self.faiss_index = faiss.IndexFlatIP(embeddings.shape[1])
         elif index_type == "ivf":
@@ -59,9 +62,9 @@ class ImprovedVectorStore:
             self.faiss_index = faiss.IndexHNSWFlat(embeddings.shape[1], 32)
             self.faiss_index.hnsw.efConstruction = 200
             self.faiss_index.hnsw.efSearch = 100
-        
+
         self.faiss_index.add(embeddings)
-        
+
         if len(texts) < 5:
             self.tfidf_vectorizer = TfidfVectorizer(min_df=1, max_df=1.0)
         else:

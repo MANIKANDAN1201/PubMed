@@ -1,9 +1,6 @@
 from typing import List, Dict, Tuple, Optional
 import numpy as np
-try:
-    from .logic.improved_vector_store import ImprovedVectorStore
-except Exception:
-    from ...improved_vector_store import ImprovedVectorStore
+from app.services.logic.improved_vector_store import ImprovedVectorStore
 
 
 _store: Optional[ImprovedVectorStore] = None

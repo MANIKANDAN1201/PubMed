@@ -1,13 +1,5 @@
 from typing import Tuple, List, Dict, Any
-try:
-    from .logic.rag_pipeline import build_vector_store, retrieve_top_chunks, answer_with_rag
-    from .logic.rag_pipeline import build_embeddings, make_llm
-except Exception:
-    build_vector_store = None
-    retrieve_top_chunks = None
-    answer_with_rag = None
-    build_embeddings = None
-    make_llm = None
+from app.services.logic.rag_pipeline import build_vector_store, retrieve_top_chunks, answer_with_rag, build_embeddings, make_llm
 
 
 def rag_answer(query: str, top_n: int = 6, embedding_model: str = "gemini", llm_model: str = "gemini-pro") -> Tuple[str, List[Dict[str, Any]]]:

@@ -8,7 +8,7 @@ import numpy as np
 from sklearn.metrics import ndcg_score
 from tqdm import tqdm
 
-from PubMed.app.services.logic.embeddings import get_embedding_model, encode_texts
+from app.services.logic.embeddings import get_embedding_model, encode_texts
 
 
 def semantic_chunk(text: str, max_len: int = 200) -> List[str]:

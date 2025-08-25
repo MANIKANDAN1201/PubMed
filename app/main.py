@@ -6,8 +6,7 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-from .routers import benchmark_router, data_analysis_router, embedding_router, vector_router, chatbot_router, query_router, rag_router, reranker_router, summary_router
-from .routers import search_router
+from app.routers import benchmark_router, data_analysis_router, embedding_router, vector_router, chatbot_router, query_router, rag_router, reranker_router, summary_router, search_router
 
 
 def create_app() -> FastAPI:
