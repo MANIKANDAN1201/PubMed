@@ -60,67 +60,84 @@ function loadTheme() {
 }
 
 // Search functionality
-async function handleSearch(e) {
-    e.preventDefault();
+async function handleSearch(event) {
+    event.preventDefault();
     
     const query = searchQuery.value.trim();
-    if (!query) return;
+    if (!query) {
+        showError('Please enter a search query');
+        return;
+    }
     
     currentQuery = query;
-    
-    // Show loading state
     showLoading();
     
     try {
         // Prepare search request
-        const searchData = {
-            query: query,
-            max_results: parseInt(document.getElementById('maxResults').value),
-            use_reranking: document.getElementById('useReranking').checked,
-            use_flashrank: document.getElementById('useFlashrank').checked,
-            free_only: document.getElementById('freeOnly').checked,
-            email: document.getElementById('email').value || undefined,
-            api_key: document.getElementById('apiKey').value || undefined
-        };
-        
-        // Make API request
         const response = await fetch(`${API_BASE_URL}/search`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(searchData)
+            body: JSON.stringify({
+                query: query,
+                max_results: 50,
+                top_k: 20,
+                free_only: false,
+                use_query_expansion: true,
+                use_reranking: true,
+                use_flashrank: false,
+                semantic_weight: 0.7,
+                keyword_weight: 0.3
+            })
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorData = await response.json();
+            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
+        currentArticles = data.articles || [];
         
-        // Store articles for chatbot/summary
-        currentArticles = data.articles;
-        
-        // Display results
-        displayResults(data);
+        displayResults(currentArticles, data.total_results, data.search_time, data);
         
     } catch (error) {
         console.error('Search error:', error);
-        showError('Search failed. Please try again.');
+        showError(`Search failed: ${error.message}`);
     } finally {
         hideLoading();
     }
 }
 
-function displayResults(data) {
-    // Update result count
-    resultCount.textContent = data.total_results;
+function displayResults(articles, totalResults, searchTime, fullData = null) {
+    hideLoading();
+    
+    if (!articles || articles.length === 0) {
+        showError('No articles found for your query');
+        return;
+    }
+    
+    // Update result count with more detailed information
+    let countText = `Found ${totalResults} articles in ${searchTime.toFixed(2)} seconds`;
+    if (fullData) {
+        if (fullData.total_fetched && fullData.total_fetched !== totalResults) {
+            countText += ` (${fullData.total_fetched} fetched from PubMed)`;
+        }
+        if (fullData.expansion_info && fullData.expansion_info.expanded_query) {
+            countText += ` • Query expanded`;
+        }
+        if (fullData.search_metadata && fullData.search_metadata.flashrank_applied) {
+            countText += ` • Reranked`;
+        }
+    }
+    resultCount.textContent = countText;
     
     // Clear previous results
     resultsGrid.innerHTML = '';
     
     // Create article cards
-    data.articles.forEach((article, index) => {
+    articles.forEach((article, index) => {
         const card = createArticleCard(article, index);
         resultsGrid.appendChild(card);
     });
@@ -135,48 +152,62 @@ function displayResults(data) {
 function createArticleCard(article, index) {
     const card = document.createElement('div');
     card.className = 'article-card';
+    card.setAttribute('data-index', index);
     
-    // Format authors
-    const authors = article.authors && article.authors.length > 0 
-        ? article.authors.slice(0, 3).join(', ') + (article.authors.length > 3 ? ' et al.' : '')
-        : 'Unknown';
+    const authors = Array.isArray(article.authors) ? article.authors.slice(0, 3).join(', ') : 'Unknown authors';
+    const year = article.year || 'Unknown year';
+    const journal = article.journal || 'Unknown journal';
+    const abstract = article.abstract || 'No abstract available';
+    const truncatedAbstract = abstract.length > 300 ? abstract.substring(0, 300) + '...' : abstract;
     
-    // Format score
-    const finalScore = (article.final_score * 100).toFixed(1);
+    // Add relevance scores if available
+    let scoreInfo = '';
+    if (article.final_score !== undefined) {
+        scoreInfo = `<div class="score-info">
+            <span class="score-badge" title="Relevance Score">Score: ${(article.final_score * 100).toFixed(1)}%</span>
+            ${article.rank ? `<span class="rank-badge" title="Rank">#${article.rank}</span>` : ''}
+        </div>`;
+    }
     
     card.innerHTML = `
         <div class="article-header">
-            <h3 class="article-title">${escapeHtml(article.title)}</h3>
+            <h3 class="article-title">
+                <a href="${article.url}" target="_blank" rel="noopener noreferrer">
+                    ${article.title || 'Untitled'}
+                </a>
+            </h3>
             <div class="article-meta">
-                <span>PMID: ${article.pmid}</span>
-                ${article.journal ? `<span>${escapeHtml(article.journal)}</span>` : ''}
-                ${article.year ? `<span>${article.year}</span>` : ''}
-                ${article.is_free ? '<span class="free-badge">Free Full Text</span>' : ''}
+                <span class="authors">${authors}</span>
+                <span class="separator">•</span>
+                <span class="journal">${journal}</span>
+                <span class="separator">•</span>
+                <span class="year">${year}</span>
+                ${article.is_free ? '<span class="free-badge">Free</span>' : ''}
             </div>
+            ${scoreInfo}
         </div>
         
-        <p class="article-abstract">${escapeHtml(article.abstract)}</p>
-        
-        <div class="article-scores">
-            <div class="score-item">
-                <span class="score-label">Relevance</span>
-                <span class="score-value">${finalScore}%</span>
-            </div>
-            <div class="score-item">
-                <span class="score-label">Rank</span>
-                <span class="score-value">#${article.rank}</span>
-            </div>
+        <div class="article-content">
+            <p class="abstract">${truncatedAbstract}</p>
         </div>
         
         <div class="article-actions">
-            <a href="${article.url}" target="_blank" class="btn btn-outline">
-                <i class="fas fa-external-link-alt"></i>
-                View on PubMed
-            </a>
-            ${article.doi ? `<a href="https://doi.org/${article.doi}" target="_blank" class="btn btn-outline">
-                <i class="fas fa-link"></i>
-                DOI
-            </a>` : ''}
+            <button class="btn btn-secondary" onclick="toggleAbstract(${index})">
+                <i class="fas fa-expand-alt"></i> Full Abstract
+            </button>
+            <button class="btn btn-secondary" onclick="addToChat(${index})">
+                <i class="fas fa-comment"></i> Ask About This
+            </button>
+            ${article.doi ? `
+                <a href="https://doi.org/${article.doi}" target="_blank" class="btn btn-secondary">
+                    <i class="fas fa-external-link-alt"></i> DOI
+                </a>
+            ` : ''}
+            ${article.full_text_link ? `
+                <a href="${article.full_text_link}" target="_blank" class="btn btn-secondary">
+                    <i class="fas fa-file-alt"></i> Full Text
+                </a>
+            ` : ''}
         </div>
     `;
     
@@ -205,135 +236,118 @@ async function sendMessage() {
     const message = chatInput.value.trim();
     if (!message) return;
     
-    // Add user message
-    addChatMessage(message, 'user');
+    // Add user message to chat
+    addMessageToChat('user', message);
     chatInput.value = '';
     
+    // Show typing indicator
+    const typingIndicator = addMessageToChat('bot', 'Thinking...');
+    
     try {
-        // Prepare request
-        const requestData = {
-            question: message,
-            articles: currentArticles,
-            max_articles: 10,
-            model: "llama3.2"
-        };
-        
-        // Show typing indicator
-        const typingIndicator = addTypingIndicator();
-        
-        // Make API request
+        // Use the new Q&A endpoint with article context
         const response = await fetch(`${API_BASE_URL}/qa`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(requestData)
+            body: JSON.stringify({
+                question: message,
+                articles: currentArticles.slice(0, 5), // Send top 5 articles as context
+                max_articles: 5
+            })
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorData = await response.json();
+            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
         
-        // Remove typing indicator
+        // Remove typing indicator and add bot response
         typingIndicator.remove();
         
-        // Add bot response
-        addChatMessage(data.response, 'bot');
+        let botResponse = data.response;
+        if (data.articles_used) {
+            botResponse += `\n\n*Based on ${data.articles_used} research articles*`;
+        }
+        
+        addMessageToChat('bot', botResponse);
         
     } catch (error) {
         console.error('Chat error:', error);
-        addChatMessage('Sorry, I encountered an error. Please try again.', 'bot');
+        typingIndicator.remove();
+        addMessageToChat('bot', `Sorry, I encountered an error: ${error.message}`);
     }
 }
 
-function addChatMessage(content, sender) {
+function addMessageToChat(sender, content) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}`;
     
     messageDiv.innerHTML = `
         <div class="message-content">
-            <p>${escapeHtml(content)}</p>
+            <p>${content}</p>
         </div>
     `;
     
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function addTypingIndicator() {
-    const typingDiv = document.createElement('div');
-    typingDiv.className = 'message bot typing-indicator';
     
-    typingDiv.innerHTML = `
-        <div class="message-content">
-            <div class="typing-dots">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-        </div>
-    `;
-    
-    chatMessages.appendChild(typingDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-    
-    return typingDiv;
+    return messageDiv;
 }
 
 // Summary functionality
 async function generateSummary() {
     if (currentArticles.length === 0) {
-        showError('Please perform a search first to generate a summary.');
+        showError('No articles to summarize');
         return;
     }
     
-    summaryModal.classList.remove('hidden');
+    summaryContent.innerHTML = '<div class="loading-spinner">Generating summary...</div>';
     
     try {
-        // Prepare request
-        const requestData = {
-            articles: currentArticles,
-            max_articles: 15,
-            model: "llama3.2"
-        };
-        
-        // Make API request
+        // Use the new summary endpoint
         const response = await fetch(`${API_BASE_URL}/summary`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(requestData)
+            body: JSON.stringify({
+                articles: currentArticles.slice(0, 10), // Send top 10 articles
+                max_articles: 10
+            })
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorData = await response.json();
+            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
         
-        // Display summary
         summaryContent.innerHTML = `
-            <div class="summary-header">
-                <p><strong>Articles analyzed:</strong> ${data.articles_used}</p>
-                <p><strong>Processing time:</strong> ${data.processing_time.toFixed(2)}s</p>
-            </div>
-            <div class="summary-text">
-                ${data.summary.split('\n').map(paragraph => 
-                    paragraph.trim() ? `<p>${escapeHtml(paragraph)}</p>` : ''
-                ).join('')}
+            <div class="summary-result">
+                <h4>Research Summary</h4>
+                <p>${data.summary}</p>
+                
+                <div class="summary-meta">
+                    <p><strong>Articles Analyzed:</strong> ${data.articles_used}</p>
+                    <p><strong>Processing Time:</strong> ${data.processing_time.toFixed(2)} seconds</p>
+                    <p><strong>Model Used:</strong> ${data.model}</p>
+                </div>
+                
+                <div class="summary-actions">
+                    <button class="btn btn-primary" onclick="copyToClipboard('${data.summary.replace(/'/g, "\\'").replace(/"/g, '\\"')}')">
+                        <i class="fas fa-copy"></i> Copy Summary
+                    </button>
+                </div>
             </div>
         `;
         
     } catch (error) {
         console.error('Summary error:', error);
-        summaryContent.innerHTML = `
-            <div class="error-message">
-                <p>Failed to generate summary. Please try again.</p>
-            </div>
-        `;
+        summaryContent.innerHTML = `<div class="error">Failed to generate summary: ${error.message}</div>`;
     }
 }
 
