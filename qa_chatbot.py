@@ -16,13 +16,21 @@ except ImportError:
     OLLAMA_AVAILABLE = False
 
 
-def format_abstracts_for_context(articles: List[PubMedArticle], top_n: int = 5) -> str:
+def format_abstracts_for_context(articles: List, top_n: int = 5) -> str:
     """Format top N articles as context for the chatbot."""
     context_parts = []
     for i, article in enumerate(articles[:top_n], 1):
-        abstract = article.abstract or "No abstract available"
-        title = article.title or "No title available"
-        pmid = article.pmid or "Unknown ID"
+        # Handle both PubMedArticle objects and dictionaries
+        if hasattr(article, 'abstract'):
+            # PubMedArticle object
+            abstract = article.abstract or "No abstract available"
+            title = article.title or "No title available"
+            pmid = article.pmid or "Unknown ID"
+        else:
+            # Dictionary format
+            abstract = article.get('abstract', "No abstract available")
+            title = article.get('title', "No title available")
+            pmid = article.get('pmid', "Unknown ID")
         
         # Clean and format the abstract
         abstract = abstract.replace('\n', ' ').strip()
