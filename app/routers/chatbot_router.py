@@ -25,37 +25,34 @@ async def chat(request: ChatRequest):
     try:
         if not request.message.strip():
             raise HTTPException(status_code=400, detail="Message cannot be empty")
-        
-        # Simple response generation without complex RAG pipeline
+
         if not request.articles:
             return ChatResponse(
                 response="I don't have any articles to reference. Please perform a search first.",
-                success=True
+                success=True,
             )
-        
-        # Basic context-aware response
-        article_count = len(request.articles)
-        sample_titles = [art.get('title', 'Untitled')[:100] for art in request.articles[:3]]
-        
-        response_text = f"""Based on the {article_count} articles in your search results, I can help answer questions about:
 
-• {sample_titles[0] if len(sample_titles) > 0 else 'Research topics'}
-• {sample_titles[1] if len(sample_titles) > 1 else 'Medical findings'}
-• {sample_titles[2] if len(sample_titles) > 2 else 'Scientific studies'}
+        # Use Ollama-backed service with llama3.2
+        try:
+            from app.services.chatbot_service import chat_answer
+        except Exception as e:
+            return ChatResponse(
+                response=f"Chat service unavailable: {e}",
+                success=False,
+            )
 
-Your question: "{request.message}"
+        # Limit context size sensibly (frontend already slices, but keep a safe cap)
+        context_articles = request.articles[:10]
+        answer = chat_answer(context_articles, request.message, top_n=len(context_articles))
 
-I'm currently in simplified mode. For detailed analysis, please ensure all dependencies are properly configured. I can see you have {article_count} articles to work with."""
+        return ChatResponse(response=answer, success=True)
 
-        return ChatResponse(
-            response=response_text,
-            success=True
-        )
-        
+    except HTTPException:
+        raise
     except Exception as e:
         return ChatResponse(
             response=f"I apologize, but I encountered an error: {str(e)}",
-            success=False
+            success=False,
         )
 
 @router.get("/ping")
