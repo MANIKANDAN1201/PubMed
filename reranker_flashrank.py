@@ -3,11 +3,16 @@ from typing import List, Tuple, Any, Optional
 
 # Import LangChain FlashRank reranker class
 try:
-    from langchain.retrievers.document_compressors.flashrank_rerank import FlashrankRerank
+    from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
     from langchain_core.documents import Document
 except ImportError:
-    FlashrankRerank = None
-    Document = None
+    try:
+        # Fallback to old import path
+        from langchain.retrievers.document_compressors.flashrank_rerank import FlashrankRerank
+        from langchain_core.documents import Document
+    except ImportError:
+        FlashrankRerank = None
+        Document = None
 
 
 def _prepare_docs(articles: List[Any], keep_indices: List[int], local_indices: List[int]) -> List[Document]:
