@@ -167,7 +167,7 @@ def evaluate(bioasq_file, top_k=5, chunk_batch_size=8, question_batch_size=4, ma
 # Entry point
 # -----------------------------
 if __name__ == "__main__":
-    result = evaluate("/content/BioASQ-train-factoid-6b-full-annotated.json",
+    result = evaluate("BioASQ-train-factoid-6b-full-annotated.json",
                       top_k=5,
                       chunk_batch_size=4,    # smaller batch for stability
                       question_batch_size=2, # smaller batch for stability
