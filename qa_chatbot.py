@@ -147,7 +147,7 @@ def render_chatbot_interface():
                 if message["role"] == "user":
                     st.markdown(
                         f"""
-                        <div style="background: #e3f2fd; padding: 10px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #2196f3;">
+                        <div style="background: #e3f2fd;color: #0d47a1; padding: 10px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #2196f3;">
                             <strong>You:</strong> {message['content']}
                         </div>
                         """,
@@ -156,7 +156,7 @@ def render_chatbot_interface():
                 else:
                     st.markdown(
                         f"""
-                        <div style="background: #f3e5f5; padding: 10px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #9c27b0;">
+                        <div style="background: #f3e5f5; color: #4a148c;padding: 10px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #9c27b0;">
                             <strong>Assistant:</strong> {message['content']}
                         </div>
                         """,
