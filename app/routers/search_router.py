@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from ..services.logic.pubmed_fetcher import fetch_pubmed_articles
 
@@ -10,11 +10,11 @@ class HybridSearchRequest(BaseModel):
     email: Optional[str] = ""
     retmax: int = 100
     topk: int = 15
-    model_name: str = "gemini"
-    expand: bool = True
-    use_reranking: bool = True
-    use_flashrank: bool = False
-    free_only: bool = False
+    model_name: str = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract"
+    expand: bool = Field(default=True, description="Query expansion is always enabled")
+    use_reranking: bool = Field(default=True, description="Reranking is always enabled")
+    use_flashrank: bool = Field(default=True, description="FlashRank reranking is always enabled")
+    free_only: bool = Field(default=False, description="Filter to show only free full-text articles")
     index_name: str = "pubmed_index"
 
 class SearchResult(BaseModel):

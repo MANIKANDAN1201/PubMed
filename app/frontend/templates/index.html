@@ -57,21 +57,7 @@
                     </div>
                 </div>
 
-                <!-- AI Model Settings -->
-                <div class="settings-group">
-                    <h4><i class="fas fa-brain"></i> AI Model</h4>
-                    <div class="form-group">
-                        <label for="model_name">Embedding Model</label>
-                        <select id="model_name" class="form-control">
-                            <option value="gemini">🌐 Gemini (embedding-001)</option>
-                            <option value="sentence-transformers/all-MiniLM-L6-v2">🔤 Sentence Transformers (MiniLM)</option>
-                            <option value="microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract">🧬 PubMedBERT</option>
-                            <option value="dmis-lab/biobert-base-cased-v1.1">🧬 BioBERT</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Search Configuration -->
+<!-- Search Configuration -->
                 <div class="settings-group">
                     <h4><i class="fas fa-sliders-h"></i> Search Config</h4>
                     <div class="form-group">
@@ -86,48 +72,15 @@
                     </div>
                 </div>
 
-                <!-- Search Enhancement -->
+                <!-- Search Settings -->
                 <div class="settings-group">
-                    <h4><i class="fas fa-wand-magic-sparkles"></i> Enhancement</h4>
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="expand" checked>
-                            <span class="checkmark"></span>
-                            Query Expansion
-                        </label>
-                        <small class="form-text">Use medical synonyms</small>
-                    </div>
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="use_reranking" checked>
-                            <span class="checkmark"></span>
-                            Intelligent Reranking
-                        </label>
-                        <small class="form-text">Boost recent, high-impact papers</small>
-                    </div>
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="use_flashrank">
-                            <span class="checkmark"></span>
-                            FlashRank Reranker
-                        </label>
-                    </div>
+                    <h4><i class="fas fa-filter"></i> Search Filter</h4>
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="free_only">
                             <span class="checkmark"></span>
-                            Free Full-Text Only
+                            Show only free full-text articles
                         </label>
-                    </div>
-                </div>
-
-                <!-- Persistence -->
-                <div class="settings-group">
-                    <h4><i class="fas fa-save"></i> Persistence</h4>
-                    <div class="form-group">
-                        <label for="index_name">Index Name</label>
-                        <input type="text" id="index_name" value="pubmed_index" class="form-control">
-                        <small class="form-text">Name for saved embeddings</small>
                     </div>
                 </div>
             </div>

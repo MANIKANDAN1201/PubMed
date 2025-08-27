@@ -9,10 +9,10 @@ const AppState = {
       retmax: 100,
       topk: 15,
       model_name: 'gemini',
-      expand: true,
-      use_reranking: true,
-      use_flashrank: false,
-      free_only: false,
+      expand: true,        // Always enabled
+      use_reranking: true, // Always enabled
+      use_flashrank: true, // Always enabled
+      free_only: false,    // User preference for free full-text only
       index_name: 'pubmed_index'
   }
 };
