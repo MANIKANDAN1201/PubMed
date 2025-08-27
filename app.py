@@ -240,15 +240,11 @@ def main() -> None:
             # Query expansion
             if settings['expand']:
                 try:
-                    run_query, synonyms_map, tokens = expand_query(query, email=settings['email'] or "")
-                    st.info(f"🔍 **Expanded query:** {run_query}")
-                    with st.expander("🔍 Query Expansion Details", expanded=False):
-                        st.write("Tokens:", tokens)
-                        st.write("Top synonyms per token (truncated):")
-                        preview = {k: v[:5] for k, v in synonyms_map.items()}
-                        st.json(preview)
+                    run_query, _, _ = expand_query(query, email=settings['email'] or "")
+                    if run_query != query:  # Only show if query was actually expanded
+                        st.info(f"🔍 **Expanded query:** {run_query}")
                 except Exception as e:
-                    st.warning(f"⚠️ Query expansion failed: {e}. Using original query.")
+                    st.warning(f"Query expansion failed: {e}")
                     run_query = query
             else:
                 run_query = query
