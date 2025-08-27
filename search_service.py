@@ -11,21 +11,43 @@ from typing import List, Optional, Tuple, Dict, Any
 from dotenv import load_dotenv
 
 # Import required modules
-from embeddings import TextEmbedder
+from embeddings import (
+    TextEmbedder as EmbeddingService, 
+    get_available_models,
+    PubMedBERTEmbedder,
+    BioBERTEmbedder,
+    GeminiEmbedder
+)
 from improved_vector_store import ImprovedVectorStore
 from rag_pipeline import ultra_fast_chunking
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-import google.generativeai as genai
 from reranker_flashrank import flashrank_rerank
 
 # Load environment variables
 load_dotenv()
 
-@st.cache_resource(show_spinner=False)
-def get_embedder(model_name: str, backend: str) -> TextEmbedder:
-    """Get cached embedder instance"""
-    use_st = model_name.startswith("sentence-transformers/") or backend.lower().startswith("sentence")
-    return TextEmbedder(model_name=model_name, use_sentence_transformers=use_st)
+# Model configuration is now handled by the unified embedding service
+
+def get_embedding_service(model_name: str) -> EmbeddingService:
+    """Get cached embedding service instance with the specified model."""
+    # Get from cache or create new
+    if not hasattr(st.session_state, 'embedding_services'):
+        st.session_state.embedding_services = {}
+    
+    if model_name not in st.session_state.embedding_services:
+        # Use specialized embedders for specific models
+        if 'pubmedbert' in model_name.lower() or 'biomednlp' in model_name.lower():
+            st.session_state.embedding_services[model_name] = PubMedBERTEmbedder()
+        elif 'biobert' in model_name.lower():
+            st.session_state.embedding_services[model_name] = BioBERTEmbedder()
+        elif 'gemini' in model_name.lower():
+            st.session_state.embedding_services[model_name] = GeminiEmbedder()
+        else:
+            # Fall back to generic TextEmbedder for other models
+            st.session_state.embedding_services[model_name] = EmbeddingService(
+                model_name=model_name
+            )
+    
+    return st.session_state.embedding_services[model_name]
 
 @st.cache_data(show_spinner=False)
 def cached_embeddings_chunked(
@@ -35,133 +57,71 @@ def cached_embeddings_chunked(
     backend: str,
     chunk_size: int = 800,
     chunk_overlap: int = 100,
+    batch_size: int = 16,
 ) -> np.ndarray:
-    """Generate cached embeddings with chunking"""
+    """Generate cached embeddings with chunking using the unified embedding service"""
+    # Get the embedding service
+    embedder = get_embedding_service(model_name)
+    
     # Prepare chunked texts per document
     chunked: List[List[str]] = []
-    for t in texts:
-        t_str = t if isinstance(t, str) else str(t)
-        chunks = ultra_fast_chunking(t_str, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-        chunked.append(chunks if len(chunks) > 0 else [t_str])
-
-    # Flatten for embedding
-    flat_texts: List[str] = [c for doc in chunked for c in doc]
-    if len(flat_texts) == 0:
-        return np.zeros((0, 768), dtype=np.float32)
-
-    if model_name == "gemini":
-        try:
-            # Ensure an event loop exists for Gemini client
-            try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                asyncio.set_event_loop(asyncio.new_event_loop())
-            emb = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-            flat_vectors: List[List[float]] = emb.embed_documents(flat_texts)
-            flat_arr = np.array(flat_vectors, dtype=np.float32)
-        except Exception as e:
-            # Try direct Google Generative AI client as fallback
-            try:
-                api_key = os.environ.get("GOOGLE_API_KEY")
-                if api_key:
-                    genai.configure(api_key=api_key)
-                flat_vectors = []
-                for t in flat_texts:
-                    res = genai.embed_content(model="models/embedding-001", content=t)
-                    vec = res.get("embedding") or res.get("data", [{}])[0].get("embedding")
-                    if vec is None:
-                        raise RuntimeError("No embedding returned from Gemini API")
-                    flat_vectors.append(vec)
-                flat_arr = np.array(flat_vectors, dtype=np.float32)
-            except Exception as e2:
-                print(f"Gemini embeddings failed: {e}; direct API fallback failed: {e2}. Falling back to PubMedBERT")
-                embedder = TextEmbedder(model_name="microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract", use_sentence_transformers=False)
-                flat_arr = embedder.encode(flat_texts, batch_size=16, normalize=True)
-    elif model_name.startswith("sentence-transformers/"):
-        # Use Sentence Transformers directly, with local caching
-        try:
-            from sentence_transformers import SentenceTransformer
-            model = SentenceTransformer(model_name, cache_folder="models")
-            embeddings = model.encode(flat_texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
-            flat_arr = np.array(embeddings, dtype=np.float32)
-        except Exception as e:
-            print(f"Sentence Transformers failed: {e}, falling back to PubMedBERT")
-            embedder = TextEmbedder(model_name="microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract", use_sentence_transformers=False)
-            flat_arr = embedder.encode(flat_texts, batch_size=16, normalize=True)
-    else:
-        embedder = get_embedder(model_name, backend)
-        flat_arr = embedder.encode(flat_texts, batch_size=16, normalize=True)
-
-    # Average pool chunks per original document
-    emb_dim = flat_arr.shape[1]
-    doc_embeddings = np.zeros((len(chunked), emb_dim), dtype=np.float32)
-    cursor = 0
-    for i, ch in enumerate(chunked):
-        num = len(ch)
-        doc_vecs = flat_arr[cursor:cursor+num]
-        cursor += num
-        if doc_vecs.shape[0] == 1:
-            avg = doc_vecs[0]
+    chunked_indices: List[int] = []
+    
+    for i, text in enumerate(texts):
+        chunks = ultra_fast_chunking(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        chunked.extend(chunks)
+        chunked_indices.extend([i] * len(chunks))
+    
+    # Generate embeddings in batches
+    all_embeddings = []
+    for i in range(0, len(chunked), batch_size):
+        batch = chunked[i:i + batch_size]
+        embeddings = embedder.encode(batch, batch_size=len(batch), normalize=True)
+        all_embeddings.append(embeddings)
+    
+    if not all_embeddings:
+        return np.array([])
+        
+    # Combine all embeddings and group by original document
+    all_embeddings = np.vstack(all_embeddings)
+    doc_embeddings = []
+    
+    for i in range(len(texts)):
+        doc_chunk_indices = [idx for idx, doc_idx in enumerate(chunked_indices) if doc_idx == i]
+        if not doc_chunk_indices:
+            # If no chunks were generated for this document, use zeros
+            doc_embeddings.append(np.zeros(embedder.get_embedding_dimensions()))
         else:
-            avg = doc_vecs.mean(axis=0)
-        # Normalize
-        norm = np.linalg.norm(avg) + 1e-12
-        doc_embeddings[i] = (avg / norm).astype(np.float32)
-
-    return doc_embeddings
+            # Average the embeddings of all chunks for this document
+            doc_embedding = np.mean(all_embeddings[doc_chunk_indices], axis=0)
+            # L2 normalize the final document embedding
+            doc_embedding = doc_embedding / np.linalg.norm(doc_embedding, axis=-1, keepdims=True)
+            doc_embeddings.append(doc_embedding)
+    
+    return np.array(doc_embeddings)
 
 def generate_query_embedding(query: str, model_name: str, backend: str, doc_embeddings_shape: Tuple[int, int]) -> Optional[np.ndarray]:
-    """Generate query embedding using the same model as document embeddings"""
-    def ensure_query_shape(q_emb, dim):
-        q_emb = np.array(q_emb, dtype=np.float32)
-        if q_emb.ndim == 1:
-            q_emb = q_emb.reshape(1, -1)
-        if q_emb.shape[1] != dim:
-            st.error(f"Query embedding dimension {q_emb.shape[1]} does not match index dimension {dim}.")
+    """Generate query embedding using the unified embedding service"""
+    if not query:
+        return None
+        
+    try:
+        # Get the embedding service
+        embedder = get_embedding_service(model_name)
+        
+        # Get query embedding using the unified interface
+        q_vec = embedder.encode([query], batch_size=1, normalize=True)[0]
+        
+        # Ensure query embedding matches document embedding dimensions
+        if len(q_vec) != doc_embeddings_shape[1]:
+            st.warning(f"Query embedding dimension ({len(q_vec)}) does not match document embedding dimension ({doc_embeddings_shape[1]})")
             return None
-        return q_emb
-
-    if model_name == "gemini":
-        try:
-            # Ensure an event loop exists for Gemini client
-            try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                asyncio.set_event_loop(asyncio.new_event_loop())
-            emb = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-            q_vec = emb.embed_query(query)
-            query_embedding = ensure_query_shape(q_vec, doc_embeddings_shape[1])
-        except Exception as e:
-            # Try direct Google Generative AI client as fallback
-            try:
-                api_key = os.environ.get("GOOGLE_API_KEY")
-                if api_key:
-                    genai.configure(api_key=api_key)
-                res = genai.embed_content(model="models/embedding-001", content=query)
-                q_vec = np.array(res.get("embedding") or res.get("data", [{}])[0].get("embedding"), dtype=np.float32)
-                query_embedding = ensure_query_shape(q_vec, doc_embeddings_shape[1])
-            except Exception as e2:
-                print(f"Gemini query embedding failed: {e}; direct API fallback failed: {e2}. Falling back to PubMedBERT")
-                embedder = TextEmbedder(model_name="microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract", use_sentence_transformers=False)
-                q_vec = embedder.encode([query], batch_size=1, normalize=True)
-                query_embedding = ensure_query_shape(q_vec, doc_embeddings_shape[1])
-    elif model_name.startswith("sentence-transformers/"):
-        try:
-            from sentence_transformers import SentenceTransformer
-            model = SentenceTransformer(model_name, cache_folder="models")
-            q_vec = model.encode([query], convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
-            query_embedding = ensure_query_shape(q_vec, doc_embeddings_shape[1])
-        except Exception as e:
-            print(f"Sentence Transformers query embedding failed: {e}, falling back to PubMedBERT")
-            embedder = TextEmbedder(model_name="microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract", use_sentence_transformers=False)
-            q_vec = embedder.encode([query], batch_size=1, normalize=True)
-            query_embedding = ensure_query_shape(q_vec, doc_embeddings_shape[1])
-    else:
-        embedder = get_embedder(model_name, backend)
-        q_vec = embedder.encode([query], batch_size=1, normalize=True)
-        query_embedding = ensure_query_shape(q_vec, doc_embeddings_shape[1])
-
-    return query_embedding
+            
+        return q_vec.reshape(1, -1)  # Return as 2D array for compatibility
+        
+    except Exception as e:
+        st.error(f"Error generating query embedding: {str(e)}")
+        return None
 
 def build_vector_store(texts: List[str], doc_embeddings: np.ndarray, metadata: List[Dict]) -> ImprovedVectorStore:
     """Build and configure the vector store"""

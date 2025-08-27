@@ -13,7 +13,12 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from improved_vector_store import ImprovedVectorStore
-from embeddings import TextEmbedder
+from embeddings import (
+    TextEmbedder,
+    PubMedBERTEmbedder,
+    BioBERTEmbedder,
+    GeminiEmbedder
+)
 import re
 
 # Conditional import to avoid dependency issues
@@ -63,7 +68,16 @@ class AbstractEmbeddingSummarizer:
     """Main class for abstract-based summarization using embeddings as knowledge base."""
     
     def __init__(self, embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"):
-        self.text_embedder = TextEmbedder(embedding_model)
+        # Use specialized embedders for specific models
+        if 'pubmedbert' in embedding_model.lower() or 'biomednlp' in embedding_model.lower():
+            self.text_embedder = PubMedBERTEmbedder()
+        elif 'biobert' in embedding_model.lower():
+            self.text_embedder = BioBERTEmbedder()
+        elif 'gemini' in embedding_model.lower():
+            self.text_embedder = GeminiEmbedder()
+        else:
+            # Fall back to generic TextEmbedder for other models
+            self.text_embedder = TextEmbedder(embedding_model)
         self.vector_store = ImprovedVectorStore()
         
     def prepare_abstract_texts(self, articles: List[PubMedArticle]) -> List[str]:

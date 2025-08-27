@@ -1,18 +1,78 @@
 from __future__ import annotations
 
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Union
 from pathlib import Path
+from dataclasses import dataclass
+import os
 
 import numpy as np
 import torch
 from transformers import AutoModel, AutoTokenizer
-import os
 
+# Try to import optional dependencies
 try:
     import google.generativeai as genai  # type: ignore
     _HAS_GENAI = True
-except Exception:
+except ImportError:
     _HAS_GENAI = False
+
+try:
+    from sentence_transformers import SentenceTransformer
+    _HAS_SENTENCE_TRANSFORMERS = True
+except ImportError:
+    _HAS_SENTENCE_TRANSFORMERS = False
+
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
+@dataclass
+class EmbeddingModelConfig:
+    """Configuration for an embedding model."""
+    name: str
+    model_id: str
+    dimensions: int
+    is_api_based: bool = False
+    requires_auth: bool = False
+    auth_env_var: Optional[str] = None
+    use_sentence_transformers: bool = False
+    max_seq_length: int = 512
+
+# Supported models configuration
+SUPPORTED_MODELS = {
+    "pubmedbert": EmbeddingModelConfig(
+        name="PubMedBERT",
+        model_id="microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract",
+        dimensions=768,
+        use_sentence_transformers=False
+    ),
+    "biobert": EmbeddingModelConfig(
+        name="BioBERT",
+        model_id="dmis-lab/biobert-base-cased-v1.1",
+        dimensions=768,
+        use_sentence_transformers=False
+    ),
+    "minilm": EmbeddingModelConfig(
+        name="MiniLM",
+        model_id="sentence-transformers/all-MiniLM-L6-v2",
+        dimensions=384,
+        use_sentence_transformers=True
+    ),
+    "gemini": EmbeddingModelConfig(
+        name="Gemini",
+        model_id="models/embedding-001",
+        dimensions=768,
+        is_api_based=True,
+        requires_auth=True,
+        auth_env_var="GOOGLE_API_KEY"
+    ),
+    "jina": EmbeddingModelConfig(
+        name="Jina",
+        model_id="jinaai/jina-embeddings-v2-base-en",
+        dimensions=768,
+        use_sentence_transformers=True
+    )
+}
 
 
 def _mean_pool(last_hidden_state: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
@@ -40,6 +100,71 @@ def _make_local_model_dir(base_dir: str, model_name: str) -> Path:
     target = Path(base_dir) / safe_name
     target.mkdir(parents=True, exist_ok=True)
     return target
+
+
+class PubMedBERTEmbedder:
+    """Adapter to provide a SentenceTransformer-like interface for PubMedBERT embeddings.
+    Exposes .encode(list[str], convert_to_numpy=True, normalize_embeddings=bool)
+    """
+
+    def __init__(self, model_name: str = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract") -> None:
+        self.model_name = model_name
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(
+            model_name,
+            output_hidden_states=True
+        ).to(self.device).eval()
+        self.dimensions = 768  # Standard for BERT-base models
+
+    def encode(
+        self,
+        texts: List[str],
+        batch_size: int = 32,
+        convert_to_numpy: bool = True,
+        normalize_embeddings: bool = True,
+        show_progress_bar: bool = False,
+        **_: dict,
+    ) -> np.ndarray:
+        """Encode texts using PubMedBERT with mean pooling."""
+        if not texts:
+            return np.zeros((0, self.dimensions), dtype=np.float32)
+
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i+batch_size]
+            inputs = self.tokenizer(
+                batch,
+                padding=True,
+                truncation=True,
+                max_length=512,
+                return_tensors="pt"
+            ).to(self.device)
+
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                # Use mean pooling on last hidden states
+                last_hidden = outputs.last_hidden_state
+                attention_mask = inputs['attention_mask'].unsqueeze(-1).expand(last_hidden.size()).float()
+                sum_embeddings = torch.sum(last_hidden * attention_mask, 1)
+                sum_mask = torch.clamp(attention_mask.sum(1), min=1e-9)
+                embeddings = sum_embeddings / sum_mask
+                
+                if normalize_embeddings:
+                    embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+                
+                all_embeddings.append(embeddings.cpu().numpy())
+
+        embeddings = np.vstack(all_embeddings)
+        return embeddings.astype(np.float32)
+
+
+class BioBERTEmbedder(PubMedBERTEmbedder):
+    """Adapter to provide a SentenceTransformer-like interface for BioBERT embeddings."""
+    
+    def __init__(self, model_name: str = "dmis-lab/biobert-base-cased-v1.1") -> None:
+        super().__init__(model_name)
+        self.dimensions = 768  # BioBERT uses BERT-base architecture
 
 
 class GeminiEmbedder:
@@ -131,9 +256,27 @@ def get_embedding_model(
         raise ImportError("sentence-transformers not installed. Run: pip install sentence-transformers")
 
 
+def get_available_models() -> Dict[str, Dict[str, Union[str, int]]]:
+    """Get information about all available models."""
+    return {
+        name: {
+            'name': config.name,
+            'dimensions': config.dimensions,
+            'is_api_based': config.is_api_based,
+            'requires_auth': config.requires_auth
+        }
+        for name, config in SUPPORTED_MODELS.items()
+    }
+
 def encode_texts(texts: List[str], model) -> np.ndarray:
-    """Encode texts using SentenceTransformer - simplified interface matching reference code"""
-    emb = model.encode(texts, convert_to_numpy=True, normalize_embeddings=False, show_progress_bar=False)
+    """Encode texts using a model - simplified interface matching reference code"""
+    if hasattr(model, 'encode'):
+        emb = model.encode(texts, convert_to_numpy=True, normalize_embeddings=False, show_progress_bar=False)
+    elif hasattr(model, 'embed_texts'):
+        emb = model.embed_texts(texts)
+    else:
+        raise ValueError("Model must have either 'encode' or 'embed_texts' method")
+    
     emb = _to_numpy(emb)
     return _l2_normalize(emb)
 
@@ -142,41 +285,144 @@ class TextEmbedder:
     def __init__(
         self,
         model_name: str,
-        use_sentence_transformers: bool = False,
+        use_sentence_transformers: Optional[bool] = None,
         device: Optional[str] = None,
         max_length: int = 512,
     ) -> None:
+        """Initialize the text embedder with the specified model.
+        
+        Args:
+            model_name: Name of the model to use (must be a key in SUPPORTED_MODELS)
+            use_sentence_transformers: Whether to use sentence-transformers (auto-detected if None)
+            device: Device to run the model on (auto-detected if None)
+            max_length: Maximum sequence length
+        """
         self.model_name = model_name
-        self.use_sentence_transformers = use_sentence_transformers
         self.max_length = max_length
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self._sbert_model = None
-        self._tokenizer = None
-        self._model = None
+        self.config = SUPPORTED_MODELS.get(model_name)
+        
+        if self.config is None:
+            # Fallback for custom models not in SUPPORTED_MODELS
+            self.config = EmbeddingModelConfig(
+                name=model_name.split('/')[-1],
+                model_id=model_name,
+                dimensions=768,  # Default, will be updated after model loading
+                use_sentence_transformers=use_sentence_transformers or False
+            )
+        
+        # Initialize model based on configuration
+        self._initialize_model()
+    
+    def _initialize_model(self):
+        """Initialize the model based on configuration."""
+        if self.config.is_api_based:
+            if self.config.requires_auth and self.config.auth_env_var:
+                api_key = os.getenv(self.config.auth_env_var)
+                if not api_key:
+                    raise ValueError(f"API key not found in {self.config.auth_env_var}")
+                if self.config.model_id == "models/embedding-001" and _HAS_GENAI:
+                    genai.configure(api_key=api_key)
+            return  # API models are initialized on demand
+        
+        if self.config.use_sentence_transformers and _HAS_SENTENCE_TRANSFORMERS:
+            from sentence_transformers import SentenceTransformer
+            self.model = SentenceTransformer(self.config.model_id, device=self.device)
+            self.config.dimensions = self.model.get_sentence_embedding_dimension()
+        else:
+            # Special handling for PubMedBERT and similar models
+            if 'pubmedbert' in self.model_name.lower() or 'biomednlp' in self.config.model_id.lower():
+                # Ensure we're using the correct tokenizer for PubMedBERT
+                self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_id)
+                # Load model with output_hidden_states=True to access all layers
+                self.model = AutoModel.from_pretrained(
+                    self.config.model_id,
+                    output_hidden_states=True
+                )
+            else:
+                # Standard transformer model loading
+                self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_id)
+                self.model = AutoModel.from_pretrained(self.config.model_id)
+            
+            self.model.eval()
+            self.model.to(self.device)
+            # Get embedding dimension from config or model
+            if hasattr(self.model.config, 'hidden_size'):
+                self.config.dimensions = self.model.config.hidden_size
+    
+    def get_embedding_dimensions(self) -> int:
+        """Get the dimensionality of the embeddings."""
+        return self.config.dimensions
 
-        if use_sentence_transformers:
-            try:
-                from sentence_transformers import SentenceTransformer  # type: ignore
+    def _embed_with_api(self, texts: List[str]) -> np.ndarray:
+        """Embed texts using an external API."""
+        if self.config.model_id == "models/embedding-001" and _HAS_GENAI:
+            chunk_size = 50  # Process in chunks to avoid rate limits
+            embeddings = []
+            
+            for i in range(0, len(texts), chunk_size):
+                chunk = texts[i:i+chunk_size]
+                response = genai.embed_content(
+                    model=self.config.model_id,
+                    content=chunk,
+                    task_type="retrieval_document"
+                )
+                embeddings.extend(response['embedding'])
+            
+            return np.array(embeddings)
+        else:
+            raise NotImplementedError(f"API-based embedding not implemented for {self.config.model_id}")
 
-                self._sbert_model = SentenceTransformer(self.model_name, device=self.device)
-            except Exception:
-                # Fall back to Transformers if ST model is unavailable/incompatible
-                self.use_sentence_transformers = False
-
-        if not self.use_sentence_transformers:
-            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self._model = AutoModel.from_pretrained(self.model_name)
-            self._model.eval()
-            self._model.to(self.device)
+    def _embed_with_transformers(self, texts: List[str], batch_size: int) -> np.ndarray:
+        """Embed texts using a HuggingFace transformer model."""
+        all_embeddings = []
+        
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i+batch_size]
+            inputs = self.tokenizer(
+                batch,
+                padding=True,
+                truncation=True,
+                max_length=self.max_length,
+                return_tensors="pt"
+            ).to(self.device)
+            
+            with torch.no_grad():
+                outputs = self.model(**inputs, return_dict=True)
+                # Use mean pooling for sentence embeddings
+                last_hidden = outputs.last_hidden_state
+                attention_mask = inputs['attention_mask'].unsqueeze(-1).expand(last_hidden.size()).float()
+                sum_embeddings = torch.sum(last_hidden * attention_mask, 1)
+                sum_mask = torch.clamp(attention_mask.sum(1), min=1e-9)
+                batch_embeddings = sum_embeddings / sum_mask
+                
+            all_embeddings.append(batch_embeddings.cpu().numpy())
+        
+        return np.vstack(all_embeddings)
 
     @torch.inference_mode()
-    def encode(self, texts: Iterable[str], batch_size: int = 16, normalize: bool = True) -> np.ndarray:
-        texts_list: List[str] = [t if isinstance(t, str) else str(t) for t in texts]
-        if len(texts_list) == 0:
-            return np.zeros((0, 768), dtype=np.float32)
-
-        if self.use_sentence_transformers and self._sbert_model is not None:
-            embeddings = self._sbert_model.encode(
+    def encode(self, texts: Iterable[str], batch_size: int = 32, normalize: bool = True) -> np.ndarray:
+        """Encode a list of texts into embeddings.
+        
+        Args:
+            texts: List of text strings to embed
+            batch_size: Batch size for processing
+            normalize: Whether to normalize the embeddings
+            
+        Returns:
+            Numpy array of shape (num_texts, embedding_dim)
+        """
+        texts_list = [t if isinstance(t, str) else str(t) for t in texts]
+        if not texts_list:
+            return np.zeros((0, self.get_embedding_dimensions()), dtype=np.float32)
+        
+        # Handle API-based models
+        if self.config.is_api_based:
+            return self._embed_with_api(texts_list)
+        
+        # Handle local models
+        if self.config.use_sentence_transformers and hasattr(self, 'model'):
+            embeddings = self.model.encode(
                 texts_list,
                 batch_size=batch_size,
                 convert_to_numpy=True,
@@ -184,29 +430,12 @@ class TextEmbedder:
                 show_progress_bar=False,
             )
             return embeddings.astype(np.float32, copy=False)
-
-        assert self._tokenizer is not None and self._model is not None
-
-        all_embeddings: List[np.ndarray] = []
-        for start in range(0, len(texts_list), batch_size):
-            batch = texts_list[start : start + batch_size]
-            inputs = self._tokenizer(
-                batch,
-                padding=True,
-                truncation=True,
-                max_length=self.max_length,
-                return_tensors="pt",
-            )
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            outputs = self._model(**inputs)
-            token_embeddings = outputs.last_hidden_state
-            sentence_embeddings = _mean_pool(token_embeddings, inputs["attention_mask"])  # [B, H]
-
+        
+        # Handle standard transformers models
+        if hasattr(self, 'model') and hasattr(self, 'tokenizer'):
+            embeddings = self._embed_with_transformers(texts_list, batch_size)
             if normalize:
-                sentence_embeddings = torch.nn.functional.normalize(sentence_embeddings, p=2, dim=1)
-
-            all_embeddings.append(sentence_embeddings.detach().cpu().numpy().astype(np.float32, copy=False))
-
-        return np.vstack(all_embeddings)
-
-
+                embeddings = _l2_normalize(embeddings)
+            return embeddings
+        
+        raise RuntimeError("No valid model or tokenizer found for encoding")

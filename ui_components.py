@@ -73,12 +73,14 @@ CUSTOM_CSS = """
 </style>
 """
 
+# Default models and their display names
 DEFAULT_MODELS: Dict[str, str] = {
-    "Gemini (models/embedding-001)": "gemini",
-    "Sentence Transformers (all-MiniLM-L6-v2)": "sentence-transformers/all-MiniLM-L6-v2",
-    "PubMedBERT (microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract)": "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract",
-    "BioBERT (dmis-lab/biobert-base-cased-v1.1)": "dmis-lab/biobert-base-cased-v1.1",
+    "🔬 PubMedBERT (Biomedical)": "pubmedbert",
+    "🧬 BioBERT (Biomedical)": "biobert",
+    "⚡ MiniLM (Fast & Lightweight)": "minilm",
+    "🌐 Gemini (API-based, requires key)": "gemini"
 }
+
 
 def setup_page_config():
     """Setup Streamlit page configuration"""
