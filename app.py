@@ -441,14 +441,12 @@ def main() -> None:
     else:  # Chatbot
         st.markdown('<div class="search-container">', unsafe_allow_html=True)
         st.subheader("Research Assistant Chatbot")
-        ctx = st.slider("Context articles", 3, 15, int(st.session_state.get('context_top_n', 5)))
         disabled = 'search_results' not in st.session_state
         if disabled:
             st.warning("Run a search to enable the chatbot.")
         else:
             # Make current articles available and (optionally) limit context count in session
             st.session_state.current_articles = st.session_state.search_results['articles']
-            st.session_state.context_top_n = ctx
         initialize_chat_session()
         render_chatbot_interface()
         st.markdown('</div>', unsafe_allow_html=True)

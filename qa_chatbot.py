@@ -154,15 +154,7 @@ def render_chatbot_interface():
         return s
 
     # Configuration
-    default_topn = int(st.session_state.get("context_top_n", 5))
-    top_n_abstracts = st.slider(
-        "Number of abstracts to use as context",
-        min_value=1,
-        max_value=10,
-        value=default_topn,
-        help="How many top results to include in the chatbot's knowledge base",
-        key="chat_context_n",
-    )
+    top_n_abstracts = 5  # fixed number of abstracts for context
 
     # Ollama status indicator
     if check_ollama_status():
@@ -178,17 +170,29 @@ def render_chatbot_interface():
 
     # Inline SVG icons (ensures rendering without external icon fonts)
     svg_user = """
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5Z" fill="#bfdbfe"/>
-      <path d="M4 22c0-4.418 3.582-8 8-8s8 3.582 8 8" stroke="#93c5fd" stroke-width="2" stroke-linecap="round"/>
+    <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="ug" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#60a5fa"/>
+          <stop offset="100%" stop-color="#22d3ee"/>
+        </linearGradient>
+      </defs>
+      <circle cx="24" cy="16" r="10" fill="url(#ug)"/>
+      <path d="M8 42c0-8.837 7.163-16 16-16s16 7.163 16 16" fill="none" stroke="#93c5fd" stroke-width="3" stroke-linecap="round"/>
     </svg>
     """
     svg_robot = """
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="3" y="8" width="18" height="10" rx="3" fill="#c7d2fe"/>
-      <circle cx="9" cy="13" r="1.8" fill="#0f172a"/>
-      <circle cx="15" cy="13" r="1.8" fill="#0f172a"/>
-      <path d="M12 4v3" stroke="#a5b4fc" stroke-width="2" stroke-linecap="round"/>
+    <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="rg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#a78bfa"/>
+          <stop offset="100%" stop-color="#6366f1"/>
+        </linearGradient>
+      </defs>
+      <rect x="6" y="14" width="36" height="22" rx="6" fill="url(#rg)"/>
+      <circle cx="18" cy="25" r="3" fill="#0f172a"/>
+      <circle cx="30" cy="25" r="3" fill="#0f172a"/>
+      <path d="M24 8v5" stroke="#c7d2fe" stroke-width="3" stroke-linecap="round"/>
     </svg>
     """
 
@@ -241,6 +245,11 @@ def render_chatbot_interface():
         unsafe_allow_html=True,
     )
 
+    # Clear input request (must happen BEFORE the widget is instantiated)
+    if st.session_state.get("_clear_chat_input"):
+        st.session_state["chat_input"] = ""
+        st.session_state["_clear_chat_input"] = False
+
     # Input row
     user_question = st.text_input(
         "Ask about the research findings...",
@@ -259,6 +268,8 @@ def render_chatbot_interface():
             with st.spinner("Thinking..."):
                 response = get_ollama_response(prompt, "llama3.2")
             st.session_state.chat_messages.append({"role": "assistant", "content": response})
+            # Defer clearing the input to the next run (must be before widget creation)
+            st.session_state._clear_chat_input = True
             st.rerun()
 
     # Clear chat
