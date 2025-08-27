@@ -1,69 +1,147 @@
-## PubMed Semantic Search(TEAM 8)
+# PubMed Semantic Search (TEAM 8)
 
-This Streamlit app enables advanced semantic and hybrid search over PubMed biomedical literature. It leverages transformer-based models (Gemini, Sentence Transformers, PubMedBERT, BioBERT), FAISS for semantic search, TF-IDF for keyword search, and intelligent reranking. The app supports query expansion with medical synonyms and MeSH terms, persistent vector index caching, and modern UI.
+![PubMed Semantic Search](https://img.shields.io/badge/version-1.0.0-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-### Features
+An advanced biomedical literature search platform powered by AI, enabling semantic search, summarization, and conversational assistance for PubMed articles.
 
-- **Hybrid Search:** Combines semantic (FAISS) and keyword (TF-IDF) search for best result
-- **Multiple Embedding Models:** Gemini, Sentence Transformers, PubMedBERT, BioBERT
-- **Query Expansion:** Uses medical synonyms and MeSH terms from PubMed
-- **Intelligent Reranking:** Boosts recent, high-impact papers
-- **Persistent Indexing:** Saves embeddings and indices for fast reuse
-- **Enhanced UI:** Card-style results, download options, index statistics
-- **Free Full-Text Detection:** PMC and Unpaywall integration
-- **Research Assistant Chatbot:** AI-powered conversational interface using Ollama models
+## 🚀 Features
 
-### Requirements
+### Core Search
+- **Hybrid Search** - Combines semantic (FAISS) and keyword (TF-IDF) search
+- **Multiple Embedding Models** - Supports Gemini, Sentence Transformers, PubMedBERT, and BioBERT
+- **Query Expansion** - Automatically enhances queries with medical synonyms and MeSH terms
+- **Intelligent Reranking** - Prioritizes recent, high-impact papers using advanced algorithms
 
-- Python 3.10+
-- Windows, macOS, or Linux
+### User Experience
+- **Interactive UI** - Modern, responsive interface with dark/light theme support
+- **Research Assistant** - AI-powered chatbot for natural language queries
+- **Article Summarization** - Generate concise summaries of search results
+- **Export Capabilities** - Download search results in CSV format
 
-### Setup
+### Performance
+- **Vector Caching** - Persistent storage of embeddings for faster searches
+- **Efficient Indexing** - Optimized FAISS indices for quick retrieval
+- **Asynchronous Processing** - Non-blocking UI during search operations
 
-1. **Create and activate a virtual environment**
-   - Windows (cmd):
-     ```
-     python -m venv .venv
-     .venv\Scripts\activate
-     ```
-   - macOS/Linux (bash):
-     ```
-     python3 -m venv .venv
-     source .venv/bin/activate
-     ```
-2. **Install dependencies**
+## 🛠️ Tech Stack
+
+### Backend
+- **Python 3.10+** - Core programming language
+- **FastAPI** - High-performance web framework
+- **FAISS** - Library for efficient similarity search
+- **Sentence Transformers** - For generating document embeddings
+- **PubMed API** - Access to biomedical literature database
+
+### Frontend
+- **Streamlit** - Rapid web application development
+- **JavaScript/HTML/CSS** - Custom UI components and styling
+- **Font Awesome** - Icons and visual elements
+
+### AI/ML
+- **Ollama** - Local LLM for the research assistant
+- **FlashRank** - Advanced reranking of search results
+- **scikit-learn** - For TF-IDF vectorization
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.10 or higher
+- pip (Python package manager)
+- Git (for cloning the repository)
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/pubmed-semantic-search.git
+   cd pubmed-semantic-search
    ```
+
+2. **Set up a virtual environment**
+   ```bash
+   # Windows
+   python -m venv venv
+   .\venv\Scripts\activate
+   
+   # macOS/Linux
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. **Install dependencies**
+   ```bash
    pip install -U pip
    pip install -r requirements.txt
    ```
-3. **Set up environment variables**
-   - Copy `env_template.txt` to `.env` and add your `GOOGLE_API_KEY` for Gemini embeddings (optional, but recommended for Gemini model).
-4. **Run the app**
-   ```
+
+4. **Configure environment variables**
+   - Copy `.env.example` to `.env`
+   - Add your API keys and configuration
+
+5. **Run the application**
+   ```bash
    streamlit run app.py
    ```
+   The application will be available at `http://localhost:8501`
 
-### Chatbot Setup (Optional)
+## 📚 Usage
 
-The app includes a research assistant chatbot that uses Ollama models for conversational AI:
+### Search Interface
+1. Enter your medical query in the search bar
+2. Adjust search settings as needed
+3. View and interact with search results
+4. Use filters to refine your search
 
-1. **Install Ollama**
-   - Visit [ollama.ai](https://ollama.ai) and download for your platform
-   - Or use: `curl -fsSL https://ollama.ai/install.sh | sh`
+### Research Assistant
+1. Navigate to the Chatbot tab
+2. Ask questions about your research topic
+3. The AI will provide relevant information from PubMed
 
-2. **Start Ollama service**
-   ```
-   ollama serve
-   ```
+### Article Summarization
+1. Perform a search
+2. Select articles of interest
+3. Generate a summary of the selected articles
 
-3. **Download the model**
-   ```
+## 📂 Project Structure
+
+```
+├── app/                    # Main application package
+│   ├── routers/           # API route definitions
+│   └── services/          # Business logic and services
+├── models/                # Data models and schemas
+├── static/                # Static files (CSS, JS, images)
+├── tests/                 # Test files
+├── .env                   # Environment variables
+├── app.py                 # Main application entry point
+├── requirements.txt       # Python dependencies
+└── README.md              # Project documentation
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a new branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- PubMed for providing access to biomedical literature
+- Hugging Face for transformer models
+- Streamlit for the amazing UI framework
+- Ollama for local language model support
    ollama pull llama3.2
-   ```
 
-4. **Use the chatbot**
-   - Perform a PubMed search first
-   - Click on the "🤖 Research Assistant Chatbot" expandable panel
+## 🚀 Usage
    - Choose between:
      - **💬 Ask Questions**: Interactive Q&A about the research findings
      - **📋 Generate Summary**: Get a comprehensive summary of the top articles
