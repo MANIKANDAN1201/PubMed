@@ -27,19 +27,12 @@ An advanced biomedical literature search platform powered by AI, enabling semant
 
 ## 🛠️ Tech Stack
 
-### Backend
+### Core Technologies
 - **Python 3.10+** - Core programming language
-- **FastAPI** - High-performance web framework
+- **Streamlit** - Web application framework
 - **FAISS** - Library for efficient similarity search
 - **Sentence Transformers** - For generating document embeddings
 - **PubMed API** - Access to biomedical literature database
-
-### Frontend
-- **Streamlit** - Rapid web application development
-- **JavaScript/HTML/CSS** - Custom UI components and styling
-- **Font Awesome** - Icons and visual elements
-
-### AI/ML
 - **Ollama** - Local LLM for the research assistant
 - **FlashRank** - Advanced reranking of search results
 - **scikit-learn** - For TF-IDF vectorization
@@ -104,20 +97,6 @@ An advanced biomedical literature search platform powered by AI, enabling semant
 2. Select articles of interest
 3. Generate a summary of the selected articles
 
-## 📂 Project Structure
-
-```
-├── app/                    # Main application package
-│   ├── routers/           # API route definitions
-│   └── services/          # Business logic and services
-├── models/                # Data models and schemas
-├── static/                # Static files (CSS, JS, images)
-├── tests/                 # Test files
-├── .env                   # Environment variables
-├── app.py                 # Main application entry point
-├── requirements.txt       # Python dependencies
-└── README.md              # Project documentation
-```
 
 ## 🤝 Contributing
 
