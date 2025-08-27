@@ -196,13 +196,7 @@ def apply_flashrank_reranking(
 ) -> Tuple[np.ndarray, np.ndarray, List[Any]]:
     """Apply FlashRank reranking if enabled"""
     try:
-        # Show top 5 titles before rerank
-        st.write("🔹 Before FlashRank (top 5):", [
-            m.get("title") if isinstance(m, dict) else getattr(m, "title", "") 
-            for m in result_metadata[:5]
-        ])
-
-        scores, indices, result_metadata = flashrank_rerank(
+        return flashrank_rerank(
             query=query,
             articles=articles,
             keep_indices=keep_indices,
@@ -210,13 +204,6 @@ def apply_flashrank_reranking(
             indices=indices,
             result_metadata=result_metadata,
         )
-
-        st.write("🔹 After FlashRank (top 5):", [
-            m.get("title") if isinstance(m, dict) else getattr(m, "title", "") 
-            for m in result_metadata[:5]
-        ])
-
-        return scores, indices, result_metadata
     except Exception as e:
         st.warning(f"FlashRank rerank failed: {e}")
         return scores, indices, result_metadata

@@ -37,9 +37,14 @@ CUSTOM_CSS = """
     gap: 8px;
 }
 .result-score { 
-    color: #2563eb; 
-    font-weight: 700; 
-    font-size: 1.1rem;
+    color: #ffffff; 
+    background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 800; 
+    font-size: 1.25rem;
+    box-shadow: 0 8px 22px rgba(99,102,241,.35), 0 2px 8px rgba(37,99,235,.25);
+    border: 1px solid rgba(99,102,241,.55);
 }
 .result-abstract { 
     color: #374151; 
@@ -112,17 +117,12 @@ def render_sidebar():
         
         st.divider()
         
-        st.subheader("🔍 Search Enhancement")
-        expand = st.checkbox("Expand query with synonyms", value=True, help="Use medical synonyms for better coverage")
-        use_reranking = st.checkbox("Enable intelligent reranking", value=True, help="Boost recent, high-impact papers")
-        use_flashrank = st.checkbox("Use Langchain's FlashRank reranker", value=False)
+        st.subheader("🔍 Search Settings")
         free_only = st.checkbox("Show only FREE full-text articles?", value=False)
-
-        st.divider()
-        
-        st.subheader("💾 Persistence")
-        save_index = st.checkbox("Save index for reuse", value=True, help="Save embeddings to avoid recomputation")
-        index_name = st.text_input("Index name", value="pubmed_index", help="Name for saved index")
+        # Always enabled settings
+        expand = True  # Always expand query with synonyms
+        use_reranking = True  # Always enable intelligent reranking
+        use_flashrank = True  # Enable FlashRank reranker by default
         
         clear_cache = st.button("🗑️ Clear all cache", type="primary")
         if clear_cache:
@@ -140,8 +140,8 @@ def render_sidebar():
         'use_reranking': use_reranking,
         'use_flashrank': use_flashrank,
         'free_only': free_only,
-        'save_index': save_index,
-        'index_name': index_name
+        'save_index': False,  # Default value since we removed the UI control
+        'index_name': 'pubmed_index'  # Default value since we removed the UI control
     }
 
 def render_search_header():
@@ -243,8 +243,11 @@ def render_result_card(rank: int, art, score: float, meta, use_reranking: bool):
                 <div class="result-title">
                     <a href="{url}" target="_blank">{title}</a>
                 </div>
-                <div style="background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; color: #666;">
-                    #{rank}
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="result-score" title="Relevance score">{float(score):.4f}</span>
+                    <div style="background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; color: #666;">
+                        #{rank}
+                    </div>
                 </div>
             </div>
             <div class="result-meta">
@@ -252,10 +255,6 @@ def render_result_card(rank: int, art, score: float, meta, use_reranking: bool):
             </div>
             <div class="result-abstract">{abstract_snippet}</div>
             <div class="score-breakdown">
-                <span class="result-score">Final Score: {float(score):.4f}</span>
-                <br>
-                <span class="metric-badge semantic-badge">Semantic: {semantic_score:.3f}</span>
-                <span class="metric-badge keyword-badge">Keyword: {keyword_score:.3f}</span>
                 <span class="metric-badge rerank-badge">Reranked: {'Yes' if use_reranking else 'No'}</span>
             </div>
         </div>
