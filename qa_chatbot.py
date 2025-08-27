@@ -202,7 +202,6 @@ def render_chatbot_interface():
                 f"<div class='chat-row user'><div class='msg-inner'><div class='chat-bubble user'>{content}</div><div class='avatar user'>{svg_user}</div></div></div>"
             )
         else:
-<<<<<<< HEAD
             st.error("❌ Ollama is not running. Please start Ollama with: `ollama serve`")
         
         # Chat Section
@@ -323,65 +322,6 @@ def render_chatbot_interface():
         # Clear summary button
         if st.button("Clear Summary", use_container_width=True):
             st.session_state.research_summary = None
-=======
-            copy_svg = """
-            <svg width='16' height='16' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' fill='none' stroke='#a5b4fc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>
-              <rect x='9' y='9' width='13' height='13' rx='2' ry='2'></rect>
-              <path d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'></path>
-            </svg>
-            """
-            chat_html.append(
-                f"<div class='chat-row assistant'><div class='msg-inner'><div class='avatar'>{svg_robot}</div><div class='chat-bubble assistant' id='assistant-msg-{idx}'>{content}</div><button class='icon-copy' data-target='assistant-msg-{idx}' title='Copy'>{copy_svg}</button></div></div>"
-            )
-    chat_html.append("</div>")
-    st.markdown("\n".join(chat_html), unsafe_allow_html=True)
-    st.markdown(
-        """
-        <script>
-          (function(){
-            const attach = () => {
-              document.querySelectorAll('.icon-copy').forEach(btn => {
-                if (btn.dataset.bound) return;
-                btn.dataset.bound = '1';
-                btn.addEventListener('click', async () => {
-                  const id = btn.getAttribute('data-target');
-                  const el = document.getElementById(id);
-                  if (!el) return;
-                  try {
-                    const text = el.innerText || el.textContent || '';
-                    await navigator.clipboard.writeText(text);
-                    btn.style.borderColor = '#22c55e';
-                    setTimeout(()=>{ btn.style.borderColor = '#27364f'; }, 1200);
-                  } catch(e) { console.warn('copy failed', e); }
-                });
-              });
-            };
-            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach); else attach();
-          })();
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Input row
-    user_question = st.text_input(
-        "Ask about the research findings...",
-        placeholder="e.g., What are the main conclusions? What methods were used?",
-        key="chat_input",
-    )
-    cols = st.columns([4,1])
-    with cols[1]:
-        send = st.button("Submit", type="primary", use_container_width=True)
-
-    if send:
-        if user_question and st.session_state.current_articles:
-            st.session_state.chat_messages.append({"role": "user", "content": user_question})
-            context = format_abstracts_for_context(st.session_state.current_articles, top_n_abstracts)
-            prompt = create_chatbot_prompt(context, user_question)
-            with st.spinner("Thinking..."):
-                response = get_ollama_response(prompt, "llama3.2")
-            st.session_state.chat_messages.append({"role": "assistant", "content": response})
->>>>>>> 9dc4b0e0aeeaac80bedff3cd0404c96568006817
             st.rerun()
 
     # Clear chat
